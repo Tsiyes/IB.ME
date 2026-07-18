@@ -187,6 +187,7 @@ export function createMultitool(
 
   const assembly = new THREE.Group()
   assembly.scale.setScalar(0.9) // ~10% smaller
+  assembly.position.y = 0.45 // sit a touch higher in the hero viewport
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
@@ -238,15 +239,18 @@ export function createMultitool(
   pickTargets.push(back.mesh)
 
   // ---- front cover with the identity CUT INTO it (CSG subtraction) ----
-  // The lettering is a real recess in the plate; the cavity walls use a dark
-  // "ink" material. Static, and kept clear of the bored rod holes at ±PIVOT_X.
-  const inkMat = new THREE.MeshStandardMaterial({
-    color: 0x0c0f13,
-    metalness: 0.3,
-    roughness: 0.85,
-    envMapIntensity: 0.5,
+  // The lettering is a real recess in the plate; cut faces use an enamel-white
+  // inlay so the glyphs read as filled lettering against the grey scale.
+  // Static, and kept clear of the bored rod holes at ±PIVOT_X.
+  const inlayMat = new THREE.MeshPhysicalMaterial({
+    color: 0xf3f1ec,
+    metalness: 0.08,
+    roughness: 0.42,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.12,
+    envMapIntensity: 0.85,
   })
-  disposables.push(inkMat)
+  disposables.push(inlayMat)
   const RECESS = 0.01
 
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
@@ -301,11 +305,11 @@ export function createMultitool(
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    const textBrush = new Brush(mergeVertices(textGeo), inkMat)
+    const textBrush = new Brush(mergeVertices(textGeo), inlayMat)
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    result.material = [scaleMat, inkMat]
+    result.material = [scaleMat, inlayMat]
     frontMesh = result
   } catch (err) {
     console.warn('[multitool] engraving CSG failed, using plain cover', err)
