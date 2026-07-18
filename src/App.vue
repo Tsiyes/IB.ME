@@ -1,12 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { ref } from 'vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
 
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
-
-const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
 
 function onAreaChange(id: string | null) {
   activeId.value = id
@@ -33,27 +31,7 @@ function hoverLegend(index: number | null) {
       </ul>
     </header>
 
-    <!-- Live inspector card -->
-    <div class="inspector" :style="activeArea ? { '--accent': activeArea.accent } : {}">
-      <Transition name="swap" mode="out-in">
-        <div v-if="activeArea" :key="activeArea.id" class="ins-body">
-          <div class="ins-head">
-            <span class="mono code">TOOL {{ activeArea.code }}</span>
-            <span class="mono muted">{{ activeArea.toolName }}</span>
-          </div>
-          <h2>{{ activeArea.label }}</h2>
-          <p class="tagline mono">{{ activeArea.tagline }}</p>
-          <p class="blurb">{{ activeArea.blurb }}</p>
-          <ul class="chips">
-            <li v-for="s in activeArea.skills" :key="s" class="mono">{{ s }}</li>
-          </ul>
-        </div>
-        <div v-else class="ins-body" key="idle">
-          <p class="blurb">{{ profile.statement }}</p>
-          <p class="mono muted hint">Hover the tool to assemble it · hover a coloured segment to deploy its tool</p>
-        </div>
-      </Transition>
-    </div>
+    <p class="mono hovertip">Hover the tool to explode it · hover a coloured insert to deploy its tool</p>
 
     <!-- Accessible legend that also drives the 3D scene -->
     <nav class="legend" aria-label="Specialist areas">
@@ -213,42 +191,21 @@ h1 {
   border-bottom: 1px solid var(--line-strong);
 }
 
-.inspector {
-  --accent: #3b82f6;
+.hovertip {
   position: absolute;
-  right: clamp(20px, 4vw, 52px);
-  top: 50%;
-  transform: translateY(-50%);
+  left: 50%;
+  top: clamp(120px, 20vh, 210px);
+  transform: translateX(-50%);
   z-index: 2;
-  width: min(34ch, 82vw);
-  background: rgba(255, 255, 255, 0.62);
-  border: 1px solid rgba(18, 24, 31, 0.1);
-  border-left: 3px solid var(--accent);
-  border-radius: 6px;
-  padding: 20px 22px;
-  backdrop-filter: blur(10px) saturate(1.1);
-  box-shadow: 0 18px 44px rgba(24, 33, 46, 0.14);
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--muted);
+  text-align: center;
   pointer-events: none;
-}
-.ins-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.74rem;
 }
 .code {
   color: var(--accent);
   letter-spacing: 0.14em;
-}
-.inspector h2 {
-  margin: 8px 0 2px;
-  font-size: 1.5rem;
-  letter-spacing: -0.02em;
-}
-.tagline {
-  color: var(--muted);
-  font-size: 0.74rem;
-  margin: 0 0 12px;
 }
 
 .legend {
@@ -346,7 +303,17 @@ h1 {
   gap: 18px;
 }
 .areas-grid {
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
+}
+@media (max-width: 900px) {
+  .areas-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 520px) {
+  .areas-grid {
+    grid-template-columns: 1fr;
+  }
 }
 .areacard {
   --accent: #3b82f6;
@@ -477,9 +444,6 @@ h1 {
 }
 
 @media (max-width: 820px) {
-  .inspector {
-    display: none;
-  }
   .two {
     grid-template-columns: 1fr;
   }

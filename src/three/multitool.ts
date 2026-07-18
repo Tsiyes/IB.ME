@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { areas, type ToolKind } from '../data/cv'
+import { areas, contact, profile, type ToolKind } from '../data/cv'
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -15,7 +15,11 @@ const HANDLE_L = 5.0
 const HANDLE_H = 1.5
 const PIVOT_X = HANDLE_L / 2 - 0.9 // end pin the tools rotate on
 const N = areas.length
-const EXPLODE_K = 2.8
+// Accordion explosion + proximity gating.
+const GAP = 0.52 // base spacing between layers when exploded
+const ACCORDION = 1.7 // extra gap near the pointer focus
+const ACCORDION_SIGMA = 1.15
+const PROXIMITY = 0.62 // how close (screen units) the pointer must be to explode
 
 const TOOL_TANG = 0.28
 const TOOL_HOLE = 0.1
@@ -34,19 +38,25 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t
 }
 
-// Stadium (fully rounded rectangle) outline used for scales and liners.
-function stadium(l: number, h: number, inset = 0): THREE.Shape {
+// Squared-off rounded rectangle used for scales and liners (only a small corner
+// radius, so the casing reads as a rectangular multi-tool rather than a stadium).
+const CORNER = 0.26
+function panelShape(l: number, h: number, inset = 0): THREE.Shape {
   const s = new THREE.Shape()
   const w = l - inset * 2
   const hh = h - inset * 2
-  const r = hh / 2
+  const r = Math.min(CORNER, hh / 2)
   const x = -w / 2
   const y = -hh / 2
   s.moveTo(x + r, y)
   s.lineTo(x + w - r, y)
-  s.absarc(x + w - r, y + r, r, -Math.PI / 2, Math.PI / 2, false)
+  s.quadraticCurveTo(x + w, y, x + w, y + r)
+  s.lineTo(x + w, y + hh - r)
+  s.quadraticCurveTo(x + w, y + hh, x + w - r, y + hh)
   s.lineTo(x + r, y + hh)
-  s.absarc(x + r, y + r, r, Math.PI / 2, (3 * Math.PI) / 2, false)
+  s.quadraticCurveTo(x, y + hh, x, y + hh - r)
+  s.lineTo(x, y + r)
+  s.quadraticCurveTo(x, y, x + r, y)
   return s
 }
 
@@ -56,12 +66,6 @@ function toolShape(kind: ToolKind): THREE.Shape {
   const s = new THREE.Shape()
   s.moveTo(0, TOOL_TANG)
   switch (kind) {
-    case 'blade': // drop-point knife
-      s.lineTo(1.4, 0.3)
-      s.quadraticCurveTo(2.35, 0.24, 2.85, 0.0)
-      s.quadraticCurveTo(2.0, -0.15, 1.2, -0.24)
-      s.lineTo(0, -TOOL_TANG)
-      break
     case 'screwdriver': // flat driver
       s.lineTo(1.7, 0.11)
       s.lineTo(1.74, 0.2)
@@ -71,13 +75,23 @@ function toolShape(kind: ToolKind): THREE.Shape {
       s.lineTo(1.7, -0.11)
       s.lineTo(0, -TOOL_TANG)
       break
-    case 'wrench': // cap-lifter / bottle opener with hook
-      s.lineTo(1.5, 0.24)
-      s.lineTo(2.15, 0.18)
-      s.lineTo(2.2, -0.02)
-      s.lineTo(1.78, -0.06)
-      s.lineTo(1.74, -0.24)
-      s.lineTo(1.4, -0.26)
+    case 'magnifier': {
+      // shaft out to a lens ring
+      const cx = 2.25
+      const R = 0.52
+      const a0 = THREE.MathUtils.degToRad(158)
+      const a1 = THREE.MathUtils.degToRad(-158)
+      s.lineTo(1.45, 0.18)
+      s.lineTo(cx + R * Math.cos(a0), R * Math.sin(a0))
+      s.absarc(cx, 0, R, a0, a1, true)
+      s.lineTo(1.45, -0.18)
+      s.lineTo(0, -TOOL_TANG)
+      break
+    }
+    case 'pencil': // uniform shaft to a sharpened conical point
+      s.lineTo(2.0, 0.16)
+      s.lineTo(2.62, 0.0)
+      s.lineTo(2.0, -0.16)
       s.lineTo(0, -TOOL_TANG)
       break
     case 'scalpel': // fine pointed blade
@@ -91,9 +105,17 @@ function toolShape(kind: ToolKind): THREE.Shape {
   // rounded tang (left semicircle) back to the start point
   s.absarc(0, 0, TOOL_TANG, -Math.PI / 2, Math.PI / 2, true)
 
+  // pivot hole
   const hole = new THREE.Path()
   hole.absarc(0, 0, TOOL_HOLE, 0, Math.PI * 2, true)
   s.holes.push(hole)
+
+  // magnifier lens cut-out
+  if (kind === 'magnifier') {
+    const lens = new THREE.Path()
+    lens.absarc(2.25, 0, 0.34, 0, Math.PI * 2, true)
+    s.holes.push(lens)
+  }
   return s
 }
 
@@ -175,7 +197,7 @@ export function createMultitool(
 
   // ---- scales (front/back covers) ----
   function makeScale(z: number) {
-    const geo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H), {
+    const geo = new THREE.ExtrudeGeometry(panelShape(HANDLE_L, HANDLE_H), {
       depth: SCALE_D,
       bevelEnabled: true,
       bevelThickness: 0.06,
@@ -200,6 +222,71 @@ export function createMultitool(
   // Scales are pickable so hovering the casing explodes the tool without
   // deploying anything (they carry no areaIndex).
   pickTargets.push(front.mesh, back.mesh)
+
+  // ---- engraved face plate (metadata rendered onto the front cover) ----
+  const plateCanvas = document.createElement('canvas')
+  plateCanvas.width = 1400
+  plateCanvas.height = 360
+  const plateCtx = plateCanvas.getContext('2d')!
+  const plateTex = new THREE.CanvasTexture(plateCanvas)
+  plateTex.colorSpace = THREE.SRGBColorSpace
+  plateTex.anisotropy = 4
+  const plateGeo = new THREE.PlaneGeometry(4.4, 1.06)
+  plateGeo.translate(0, 0, SCALE_D / 2 + 0.021)
+  disposables.push(plateGeo)
+  const plateMat = new THREE.MeshBasicMaterial({
+    map: plateTex,
+    transparent: true,
+    depthWrite: false,
+  })
+  disposables.push(plateMat, plateTex)
+  front.group.add(new THREE.Mesh(plateGeo, plateMat))
+
+  function wrapLine(text: string, font: string, color: string, x: number, y: number, maxW: number) {
+    plateCtx.font = font
+    plateCtx.fillStyle = color
+    const words = text.split(' ')
+    let line = ''
+    let yy = y
+    for (const w of words) {
+      const test = line ? line + ' ' + w : w
+      if (plateCtx.measureText(test).width > maxW && line) {
+        plateCtx.fillText(line, x, yy)
+        line = w
+        yy += 46
+      } else {
+        line = test
+      }
+    }
+    plateCtx.fillText(line, x, yy)
+  }
+
+  function drawPlate(idx: number) {
+    const ctx = plateCtx
+    ctx.clearRect(0, 0, plateCanvas.width, plateCanvas.height)
+    ctx.textBaseline = 'top'
+    const pad = 60
+    if (idx < 0) {
+      ctx.fillStyle = '#eaf0f6'
+      ctx.font = 'bold 128px Inter, system-ui, sans-serif'
+      ctx.fillText(profile.name, pad, 66)
+      ctx.fillStyle = '#9fb0c4'
+      ctx.font = '46px ui-monospace, monospace'
+      ctx.fillText(profile.title, pad, 214)
+      ctx.fillText(contact.email, pad, 276)
+    } else {
+      const area = areas[idx]
+      ctx.fillStyle = area.accent
+      ctx.font = 'bold 48px ui-monospace, monospace'
+      ctx.fillText(`TOOL ${area.code} · ${area.toolName.toUpperCase()}`, pad, 52)
+      ctx.fillStyle = '#f2f6fb'
+      ctx.font = 'bold 118px Inter, system-ui, sans-serif'
+      ctx.fillText(area.label, pad, 108)
+      wrapLine(area.tagline, '44px ui-monospace, monospace', '#b9c4d2', pad, 250, plateCanvas.width - pad * 2)
+    }
+    plateTex.needsUpdate = true
+  }
+  drawPlate(-1)
 
   // ---- pivot + end pins ----
   function makePin(x: number) {
@@ -234,7 +321,7 @@ export function createMultitool(
     // colored liner — a full handle-shaped plate whose coloured rim is visible
     // between the scales (canted view) and which is the hover target that deploys
     // this area's tool.
-    const linerGeo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H, 0.02), {
+    const linerGeo = new THREE.ExtrudeGeometry(panelShape(HANDLE_L, HANDLE_H, 0.02), {
       depth: LINER_D,
       bevelEnabled: true,
       bevelThickness: 0.02,
@@ -294,6 +381,11 @@ export function createMultitool(
     })
   })
 
+  // Layers ordered front→back along the pin axis, for the accordion explosion.
+  const ordered = [...explodeLayers].sort((a, b) => b.baseZ - a.baseZ)
+  const M = ordered.length
+  const center = (M - 1) / 2
+
   // ---- interaction ----
   const raycaster = new THREE.Raycaster()
   const pointer = new THREE.Vector2()
@@ -312,6 +404,7 @@ export function createMultitool(
     const id = idx >= 0 ? areas[idx].id : null
     if (id !== reported) {
       reported = id
+      drawPlate(idx)
       options.onAreaChange?.(id)
     }
   }
@@ -349,24 +442,53 @@ export function createMultitool(
   const start = performance.now()
   let running = true
 
+  const tmp = new THREE.Vector3()
+
   function applyFrame(t: number) {
     const idx = activeIndex()
-    // Hovering (or a legend selection) gradually EXPLODES the tool; at rest it
-    // stays assembled.
-    const wantExplode = stageHover || externalIndex !== null
+
+    parallax.lerp(parallaxTarget, 0.06)
+    // Canted (3/4) at all times; swings a little further as it explodes.
+    assembly.rotation.y = 0.6 + 0.2 * explodeScalar + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
+    assembly.rotation.x = 0.3 + 0.12 * explodeScalar - parallax.y * 0.13 + 0.02 * Math.sin(t * 0.35)
+    assembly.rotation.z = 0
+    assembly.updateMatrixWorld(true)
+
+    // Proximity: only explode once the pointer is close to the model on screen.
+    tmp.set(0, 0, 0).applyMatrix4(assembly.matrixWorld).project(camera)
+    const cdx = (pointer.x - tmp.x) * camera.aspect
+    const cdy = pointer.y - tmp.y
+    const near = Math.sqrt(cdx * cdx + cdy * cdy) < PROXIMITY
+    const wantExplode = (stageHover && near) || externalIndex !== null
     explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
     const a = ease(explodeScalar)
 
-    parallax.lerp(parallaxTarget, 0.06)
-    // Always shown canted (3/4) so the coloured inserts read even when assembled;
-    // swings a little further as it explodes.
-    assembly.rotation.y = 0.6 + 0.2 * a + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
-    assembly.rotation.x = 0.3 + 0.12 * a - parallax.y * 0.13 + 0.02 * Math.sin(t * 0.35)
-    assembly.rotation.z = 0
+    // Focus: which layer is nearest the pointer (drives the accordion).
+    let fw = 0
+    let fwsum = 0
+    for (let o = 0; o < M; o++) {
+      ordered[o].obj.getWorldPosition(tmp).project(camera)
+      const dx = (pointer.x - tmp.x) * camera.aspect
+      const dy = pointer.y - tmp.y
+      const w = 1 / (dx * dx + dy * dy + 0.05)
+      fw += o * w
+      fwsum += w
+    }
+    const focus = fwsum > 0 ? fw / fwsum : center
 
-    // explode along the pin axis (Z)
-    for (const l of explodeLayers) {
-      l.obj.position.z = l.baseZ * (1 + EXPLODE_K * a)
+    // Accordion positions: cumulative gaps, larger near the focus.
+    let pos = 0
+    const positions: number[] = [0]
+    for (let k = 1; k < M; k++) {
+      const d = k - 0.5 - focus
+      const bump = ACCORDION * Math.exp(-(d * d) / (2 * ACCORDION_SIGMA * ACCORDION_SIGMA))
+      pos += GAP * (1 + bump)
+      positions.push(pos)
+    }
+    const mean = positions.reduce((s, v) => s + v, 0) / M
+    for (let o = 0; o < M; o++) {
+      const target = positions[o] - mean
+      ordered[o].obj.position.z = lerp(ordered[o].baseZ, target, a)
     }
 
     for (let i = 0; i < tools.length; i++) {

@@ -20,12 +20,16 @@ areas (Development, Product, Management, Healthcare Sciences).
   output is sufficient; the owner reviews the running app post-merge.
 - Interaction is HOVER-driven, not scroll-driven. `src/three/multitool.ts` owns the
   scene and attaches its own pointer listeners to the canvas. At REST the tool is
-  ASSEMBLED; hovering the model gradually EXPLODES it (eases `explodeScalar` 0→1).
+  ASSEMBLED; the model only starts to EXPLODE once the pointer is within `PROXIMITY`
+  (screen-space) of it. The explosion is an accordion — layer gaps are largest nearest
+  the pointer (`ACCORDION`/`ACCORDION_SIGMA`, focus computed by projecting each layer).
   Hovering a coloured liner (or `setActiveArea()` from the DOM legend in `App.vue`)
   swings that area's tool open — tools only deploy once exploded (`deploy = hover *
   explode`). Bare scales are pickable but carry no `areaIndex`, so hovering the casing
   explodes without deploying. Active area is reported via `onAreaChange`. Scroll only
   reads the document below the hero.
+- The active-area metadata is engraved onto the front cover via a `CanvasTexture`
+  ("face plate", `drawPlate()` in `multitool.ts`) rather than a floating HTML card.
 - The layers separate along the pin axis (Z). Because the camera looks nearly down Z,
   the whole assembly is kept at a canted 3/4 view at all times (see `assembly.rotation`
   in `applyFrame`, swinging slightly further as it explodes) so the coloured inserts
