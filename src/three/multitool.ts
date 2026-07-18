@@ -187,6 +187,7 @@ export function createMultitool(
 
   const assembly = new THREE.Group()
   assembly.scale.setScalar(0.9) // ~10% smaller
+  assembly.position.y = 0.45 // sit a touch higher in the hero viewport
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
@@ -238,16 +239,16 @@ export function createMultitool(
   pickTargets.push(back.mesh)
 
   // ---- front cover with the identity CUT INTO it (CSG subtraction) ----
-  // The lettering is a real recess in the plate; cut faces use a brass inlay
-  // material so the glyphs read as coloured fill against the grey scale.
+  // The lettering is a real recess in the plate; cut faces use an enamel-white
+  // inlay so the glyphs read as filled lettering against the grey scale.
   // Static, and kept clear of the bored rod holes at ±PIVOT_X.
   const inlayMat = new THREE.MeshPhysicalMaterial({
-    color: 0xc4a35a,
-    metalness: 0.88,
-    roughness: 0.32,
-    clearcoat: 0.45,
-    clearcoatRoughness: 0.2,
-    envMapIntensity: 1.35,
+    color: 0xf3f1ec,
+    metalness: 0.08,
+    roughness: 0.42,
+    clearcoat: 0.9,
+    clearcoatRoughness: 0.12,
+    envMapIntensity: 0.85,
   })
   disposables.push(inlayMat)
   const RECESS = 0.01
