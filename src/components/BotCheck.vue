@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { areas, type Area } from '../data/cv'
+import { formatCount, recordBotBounce, recordVisit } from '../lib/counters'
 import { playToolClick, unlockAudio } from '../three/sfx'
 
 const emit = defineEmits<{ passed: [] }>()
@@ -18,9 +19,15 @@ const target = areas[Math.floor(Math.random() * areas.length)]
 const choices = ref<Area[]>([])
 const phase = ref<'ask' | 'wrong' | 'ok'>('ask')
 const shake = ref(false)
+const visits = ref<number | null>(null)
+const botsBounced = ref<number | null>(null)
 
 onMounted(() => {
   choices.value = shuffle(areas)
+  void recordVisit().then((snap) => {
+    visits.value = snap.visits
+    botsBounced.value = snap.botsBounced
+  })
 })
 
 function pick(area: Area) {
@@ -34,6 +41,9 @@ function pick(area: Area) {
   }
   phase.value = 'wrong'
   shake.value = true
+  void recordBotBounce().then((snap) => {
+    botsBounced.value = snap.botsBounced
+  })
   window.setTimeout(() => {
     shake.value = false
     phase.value = 'ask'
@@ -80,6 +90,12 @@ function skip() {
       </p>
 
       <button type="button" class="skip mono" @click="skip">Skip check</button>
+
+      <p class="tally mono" aria-live="polite">
+        <span>Visits {{ formatCount(visits) }}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>Bots bounced {{ formatCount(botsBounced) }}</span>
+      </p>
     </div>
   </div>
 </template>
@@ -239,6 +255,21 @@ h2 {
 .skip:focus-visible {
   color: var(--ink);
   outline: none;
+}
+
+.tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: center;
+  margin: 22px 0 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.tally .sep {
+  opacity: 0.55;
 }
 
 @media (max-width: 520px) {
