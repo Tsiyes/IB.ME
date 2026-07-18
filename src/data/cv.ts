@@ -6,7 +6,7 @@
 // `accent` colours the segment's synthetic material and its UI highlights.
 // -----------------------------------------------------------------------------
 
-export type ToolKind = 'driver' | 'scissors' | 'saw' | 'blade'
+export type ToolKind = 'driver' | 'wrench' | 'saw' | 'blade'
 
 export interface Highlight {
   title: string
@@ -103,8 +103,8 @@ export const areas: Area[] = [
     id: 'product',
     code: '02',
     label: 'Product',
-    toolName: 'Scissors',
-    tool: 'scissors',
+    toolName: 'Wrench',
+    tool: 'wrench',
     tagline: 'Shaping compliant, usable products',
     blurb:
       'Owning product direction for regulated medical software — balancing clinical needs, usability and the certification bar that healthcare devices must clear.',
