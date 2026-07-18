@@ -668,10 +668,10 @@ export function createMultitool(
     explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
     const a = ease(explodeScalar)
 
-    // Canted at rest; tilts further open as it explodes so coloured liners
-    // present a wider pick surface toward the camera.
-    assembly.rotation.y = 0.38 + 0.62 * a + parallax.x * 0.2 + 0.04 * Math.sin(t * 0.3)
-    assembly.rotation.x = 0.3 + 0.28 * a - parallax.y * 0.12 + 0.02 * Math.sin(t * 0.35)
+    // Full-frontal at rest; cants open with the explode so coloured liners
+    // present toward the camera. Light cursor parallax is always allowed.
+    assembly.rotation.y = 0.92 * a + parallax.x * 0.14 + 0.03 * a * Math.sin(t * 0.3)
+    assembly.rotation.x = 0.48 * a - parallax.y * 0.1 + 0.015 * a * Math.sin(t * 0.35)
     assembly.rotation.z = 0
     assembly.updateMatrixWorld(true)
 
