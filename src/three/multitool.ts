@@ -316,7 +316,7 @@ export function createMultitool(
     envMapIntensity: 0.85,
   })
   disposables.push(inlayMat)
-  const RECESS = 0.05
+  const RECESS = 0.1
   // Leave a hair of metal lip so the inlay reads as seated in the pocket.
   const INLAY_CLEARANCE = 0.006
 

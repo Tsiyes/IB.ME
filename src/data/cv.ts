@@ -48,7 +48,7 @@ export interface Credential {
 }
 
 export const profile = {
-  name: 'Isaac Bristow',
+  name: 'ISAAC BRISTOW',
   creds: 'BSc (Hons)',
   title: 'Implementation · PM · Product · Development · QA',
   statement:
@@ -56,7 +56,7 @@ export const profile = {
 }
 
 export const contact = {
-  email: '',
+  email: 'isaaclbristow@gmail.com',
   phone: '',
   linkedin: 'linkedin.com/in/isaac-bristow',
   linkedinUrl: 'https://www.linkedin.com/in/isaac-bristow/',
