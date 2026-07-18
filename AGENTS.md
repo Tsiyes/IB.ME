@@ -15,6 +15,8 @@ areas (Development, Product, Management, Healthcare Sciences).
 - This is a static frontend only — no backend, database, or auth. Testing = run
   `npm run dev` and interact in the browser. It is WebGL/Three.js, so verification
   needs a real browser (GPU/WebGL); it won't render via headless HTML checks.
+- Testing preference (owner request): do NOT record demo videos for this project —
+  screenshots plus lint/build output are sufficient evidence.
 - Scroll drives everything: `src/App.vue` converts scroll position into a 0–1
   `progress` (over `SECTION_COUNT` full-viewport sections) passed to
   `src/three/multitool.ts`, which eases toward it and computes each tool's fold
