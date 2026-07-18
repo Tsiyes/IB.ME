@@ -1,15 +1,5 @@
 # Multi-Tool CV — Isaac Bristow
 
-An interactive CV presented as a **3D folding penknife**. At rest it sits assembled at
-a canted 3/4 angle so the colored area inserts are visible between the scales. **Hover**
-the model to gradually **explode** it along the pivot axis, then hover one of the
-colored inserts to swing that area's tool open. Each insert maps to a specialist area:
-
-1. **Development**
-2. **Product**
-3. **Management**
-4. **Healthcare Sciences**
-
 Built with **Vue 3 + Vite + TypeScript**; the tool is real 3D via **Three.js**
 (WebGL) with a studio environment (`RoomEnvironment`) and clearcoat/chrome materials
 for a high-res synthetic look. Full experience, education and accolades are in the
