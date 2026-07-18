@@ -2,104 +2,120 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { areas, type ToolKind } from '../data/cv'
 
-// Handle segment geometry.
-const SEG_W = 1.1
-const SEG_H = 1.0
-const SEG_D = 0.6
-const PITCH = 1.16
+// -----------------------------------------------------------------------------
+// A realistic folding penknife multi-tool.
+//
+// The handle is a rounded "stadium" of two scales; between them sit four steel
+// tools that pivot on the end pin. At rest the whole thing is exploded along the
+// pin axis (Z) — like a CAD exploded assembly. Hovering the model collapses it
+// together; hovering a zone/segment swings that area's tool open.
+// -----------------------------------------------------------------------------
+
+const HANDLE_L = 5.0
+const HANDLE_H = 1.5
+const PIVOT_X = HANDLE_L / 2 - 0.9 // end pin the tools rotate on
 const N = areas.length
-const TOOL_SCALE = 0.68
-const TOOL_DEPTH = 0.16
+const EXPLODE_K = 2.4
+
+const TOOL_TANG = 0.28
+const TOOL_HOLE = 0.1
+const TOOL_DEPTH = 0.12
+const SCALE_D = 0.14
+const LINER_D = 0.06
+
+const CLOSED = Math.PI // tools point back into the handle when stowed
+// Deploy angles fan the tools upward out of the end.
+const openAngle = (i: number) => Math.PI * (0.5 + (i - (N - 1) / 2) * 0.1)
 
 function ease(t: number) {
   return t * t * (3 - 2 * t)
 }
-function segX(i: number) {
-  return -((N - 1) / 2) * PITCH + i * PITCH
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t
 }
 
-// Tool profiles are drawn pointing +X from the origin; the mesh is later rotated
-// so the tool points -Y (downward) out of the bottom of its segment.
-function toolShape(kind: ToolKind): THREE.Shape {
+// Stadium (fully rounded rectangle) outline used for scales and liners.
+function stadium(l: number, h: number, inset = 0): THREE.Shape {
   const s = new THREE.Shape()
-  switch (kind) {
-    case 'screwdriver':
-      s.moveTo(0, -0.1)
-      s.lineTo(1.55, -0.1)
-      s.lineTo(1.62, -0.17)
-      s.lineTo(2.08, -0.13)
-      s.lineTo(2.08, 0.13)
-      s.lineTo(1.62, 0.17)
-      s.lineTo(1.55, 0.1)
-      s.lineTo(0, 0.1)
-      break
-    case 'blade':
-      s.moveTo(0, -0.13)
-      s.lineTo(1.5, -0.15)
-      s.lineTo(2.45, 0)
-      s.lineTo(1.3, 0.17)
-      s.lineTo(0, 0.13)
-      break
-    case 'wrench':
-      s.moveTo(0, -0.11)
-      s.lineTo(1.45, -0.11)
-      s.lineTo(1.45, -0.3)
-      s.lineTo(2.15, -0.3)
-      s.lineTo(2.15, -0.11)
-      s.lineTo(1.82, -0.11)
-      s.lineTo(1.82, 0.11)
-      s.lineTo(2.15, 0.11)
-      s.lineTo(2.15, 0.3)
-      s.lineTo(1.45, 0.3)
-      s.lineTo(1.45, 0.11)
-      s.lineTo(0, 0.11)
-      break
-    case 'scalpel':
-      s.moveTo(0, -0.09)
-      s.lineTo(1.35, -0.09)
-      s.lineTo(1.55, -0.17)
-      s.lineTo(2.2, -0.05)
-      s.lineTo(2.1, 0.05)
-      s.lineTo(1.5, 0.14)
-      s.lineTo(1.35, 0.09)
-      s.lineTo(0, 0.09)
-      break
-  }
-  s.closePath()
-  return s
-}
-
-function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
-  const s = new THREE.Shape()
+  const w = l - inset * 2
+  const hh = h - inset * 2
+  const r = hh / 2
   const x = -w / 2
-  const y = -h / 2
+  const y = -hh / 2
   s.moveTo(x + r, y)
   s.lineTo(x + w - r, y)
-  s.quadraticCurveTo(x + w, y, x + w, y + r)
-  s.lineTo(x + w, y + h - r)
-  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
-  s.lineTo(x + r, y + h)
-  s.quadraticCurveTo(x, y + h, x, y + h - r)
-  s.lineTo(x, y + r)
-  s.quadraticCurveTo(x, y, x + r, y)
+  s.absarc(x + w - r, y + r, r, -Math.PI / 2, Math.PI / 2, false)
+  s.lineTo(x + r, y + hh)
+  s.absarc(x + r, y + r, r, Math.PI / 2, (3 * Math.PI) / 2, false)
   return s
 }
 
-interface Part {
-  group: THREE.Group // the segment group (moves during explode/assemble)
-  toolPivot: THREE.Group // folds to extrude the tool
-  segMat: THREE.MeshPhysicalMaterial
+// Each tool is a folding implement with a rounded tang + pivot hole at the
+// origin and a recognizable working end pointing +X.
+function toolShape(kind: ToolKind): THREE.Shape {
+  const s = new THREE.Shape()
+  s.moveTo(0, TOOL_TANG)
+  switch (kind) {
+    case 'blade': // drop-point knife
+      s.lineTo(1.4, 0.3)
+      s.quadraticCurveTo(2.35, 0.24, 2.85, 0.0)
+      s.quadraticCurveTo(2.0, -0.15, 1.2, -0.24)
+      s.lineTo(0, -TOOL_TANG)
+      break
+    case 'screwdriver': // flat driver
+      s.lineTo(1.7, 0.11)
+      s.lineTo(1.74, 0.2)
+      s.lineTo(2.2, 0.16)
+      s.lineTo(2.2, -0.16)
+      s.lineTo(1.74, -0.2)
+      s.lineTo(1.7, -0.11)
+      s.lineTo(0, -TOOL_TANG)
+      break
+    case 'wrench': // cap-lifter / bottle opener with hook
+      s.lineTo(1.5, 0.24)
+      s.lineTo(2.15, 0.18)
+      s.lineTo(2.2, -0.02)
+      s.lineTo(1.78, -0.06)
+      s.lineTo(1.74, -0.24)
+      s.lineTo(1.4, -0.26)
+      s.lineTo(0, -TOOL_TANG)
+      break
+    case 'scalpel': // fine pointed blade
+      s.lineTo(1.6, 0.18)
+      s.lineTo(2.55, 0.03)
+      s.lineTo(2.5, -0.05)
+      s.lineTo(1.3, -0.2)
+      s.lineTo(0, -TOOL_TANG)
+      break
+  }
+  // rounded tang (left semicircle) back to the start point
+  s.absarc(0, 0, TOOL_TANG, -Math.PI / 2, Math.PI / 2, true)
+
+  const hole = new THREE.Path()
+  hole.absarc(0, 0, TOOL_HOLE, 0, Math.PI * 2, true)
+  s.holes.push(hole)
+  return s
+}
+
+interface ToolNode {
+  layer: THREE.Group // holds liner + pivot; explodes along Z
+  pivot: THREE.Group // rotates to deploy the tool
   toolMat: THREE.MeshPhysicalMaterial
-  accent: THREE.Color
-  segExplode: THREE.Vector3
-  toolExplode: THREE.Vector3
+  linerMat: THREE.MeshPhysicalMaterial
+  inlayMat: THREE.MeshPhysicalMaterial
+  baseZ: number
+  open: number
   hover: number
+}
+
+interface ExplodeLayer {
+  obj: THREE.Object3D
+  baseZ: number
 }
 
 export interface Multitool {
   resize: () => void
   dispose: () => void
-  /** Drive a segment from outside the canvas (e.g. keyboard/legend). null clears. */
   setActiveArea: (index: number | null) => void
 }
 
@@ -114,146 +130,214 @@ export function createMultitool(
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.15
+  renderer.toneMappingExposure = 1.12
 
   const scene = new THREE.Scene()
-
   const pmrem = new THREE.PMREMGenerator(renderer)
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.02).texture
 
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100)
-  camera.position.set(0, 0.2, 10)
-  camera.lookAt(0, -0.45, 0)
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
+  camera.position.set(0.2, 0.9, 12)
+  camera.lookAt(0.2, 0.7, 0)
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.5))
-  const key = new THREE.DirectionalLight(0xffffff, 2.4)
-  key.position.set(4, 7, 6)
+  scene.add(new THREE.AmbientLight(0xffffff, 0.45))
+  const key = new THREE.DirectionalLight(0xffffff, 2.5)
+  key.position.set(4, 8, 7)
   scene.add(key)
   const fill = new THREE.DirectionalLight(0xcfe0ff, 0.9)
-  fill.position.set(-6, 1, 4)
+  fill.position.set(-6, 2, 5)
   scene.add(fill)
-  const rim = new THREE.DirectionalLight(0xffffff, 1.4)
-  rim.position.set(-3, -5, -6)
+  const rim = new THREE.DirectionalLight(0xffffff, 1.5)
+  rim.position.set(-3, -5, -7)
   scene.add(rim)
 
   const assembly = new THREE.Group()
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
+  const explodeLayers: ExplodeLayer[] = []
   const pickTargets: THREE.Object3D[] = []
-  const parts: Part[] = []
+  const tools: ToolNode[] = []
 
-  const toolMatBase = {
-    color: new THREE.Color(0xe6ecf3),
+  const scaleMat = new THREE.MeshPhysicalMaterial({
+    color: 0x4a515a,
+    metalness: 0.92,
+    roughness: 0.34,
+    clearcoat: 0.5,
+    clearcoatRoughness: 0.25,
+    envMapIntensity: 1.4,
+  })
+  const boltMat = new THREE.MeshPhysicalMaterial({
+    color: 0x9aa2ad,
+    metalness: 1,
+    roughness: 0.2,
+    envMapIntensity: 1.6,
+  })
+  disposables.push(scaleMat, boltMat)
+
+  // ---- scales (front/back covers) ----
+  function makeScale(z: number) {
+    const geo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H), {
+      depth: SCALE_D,
+      bevelEnabled: true,
+      bevelThickness: 0.06,
+      bevelSize: 0.06,
+      bevelSegments: 5,
+      curveSegments: 22,
+      steps: 1,
+    })
+    geo.translate(0, 0, -SCALE_D / 2)
+    disposables.push(geo)
+    const mesh = new THREE.Mesh(geo, scaleMat)
+    const group = new THREE.Group()
+    group.position.z = z
+    group.add(mesh)
+    assembly.add(group)
+    explodeLayers.push({ obj: group, baseZ: z })
+    return { group, mesh }
+  }
+
+  const front = makeScale(0.52)
+  makeScale(-0.52)
+  pickTargets.push(front.mesh)
+  const frontScaleMesh = front.mesh
+
+  // ---- colored zone inlays on the front scale (visual segmentation) ----
+  const zoneW = HANDLE_L / N
+  const inlayMats: THREE.MeshPhysicalMaterial[] = []
+  areas.forEach((area, i) => {
+    const cx = -HANDLE_L / 2 + zoneW * (i + 0.5)
+    const geo = new THREE.ExtrudeGeometry(stadium(zoneW * 0.66, 0.34), {
+      depth: 0.04,
+      bevelEnabled: true,
+      bevelThickness: 0.02,
+      bevelSize: 0.02,
+      bevelSegments: 2,
+      curveSegments: 12,
+      steps: 1,
+    })
+    geo.translate(cx, 0.42, SCALE_D / 2 + 0.02)
+    disposables.push(geo)
+    const mat = new THREE.MeshPhysicalMaterial({
+      color: new THREE.Color(area.accent),
+      metalness: 0.4,
+      roughness: 0.25,
+      clearcoat: 1,
+      clearcoatRoughness: 0.12,
+      emissive: new THREE.Color(area.accent),
+      emissiveIntensity: 0.08,
+      envMapIntensity: 1.2,
+    })
+    disposables.push(mat)
+    const mesh = new THREE.Mesh(geo, mat)
+    front.group.add(mesh)
+    inlayMats.push(mat)
+  })
+
+  // ---- pivot + end pins ----
+  function makePin(x: number) {
+    const geo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 24)
+    geo.rotateX(Math.PI / 2)
+    geo.translate(x, 0, 0)
+    disposables.push(geo)
+    assembly.add(new THREE.Mesh(geo, boltMat))
+  }
+  makePin(PIVOT_X)
+  makePin(-PIVOT_X)
+
+  // ---- tools + colored liners ----
+  const toolMatParams = {
+    color: new THREE.Color(0xe8eef4),
     metalness: 1.0,
-    roughness: 0.13,
+    roughness: 0.12,
     clearcoat: 0.7,
-    clearcoatRoughness: 0.12,
+    clearcoatRoughness: 0.1,
     envMapIntensity: 1.7,
   }
 
+  const baseZs = [0.3, 0.12, -0.12, -0.3]
+
   areas.forEach((area, i) => {
     const accent = new THREE.Color(area.accent)
+    const layer = new THREE.Group()
+    layer.position.z = baseZs[i]
+    assembly.add(layer)
+    explodeLayers.push({ obj: layer, baseZ: baseZs[i] })
 
-    const group = new THREE.Group()
-    group.position.set(segX(i), 0, 0)
-    assembly.add(group)
-
-    // Segment body — glossy synthetic plastic.
-    const segGeo = new THREE.ExtrudeGeometry(roundedRectShape(SEG_W, SEG_H, 0.16), {
-      depth: SEG_D,
+    // colored liner (handle-shaped plate, behind the tool)
+    const linerGeo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H, 0.12), {
+      depth: LINER_D,
       bevelEnabled: true,
-      bevelThickness: 0.05,
-      bevelSize: 0.05,
-      bevelSegments: 4,
-      curveSegments: 14,
+      bevelThickness: 0.02,
+      bevelSize: 0.02,
+      bevelSegments: 2,
+      curveSegments: 20,
       steps: 1,
     })
-    segGeo.translate(0, 0, -SEG_D / 2)
-    disposables.push(segGeo)
-
-    const segMat = new THREE.MeshPhysicalMaterial({
+    linerGeo.translate(0, 0, -LINER_D / 2 - 0.08)
+    disposables.push(linerGeo)
+    const linerMat = new THREE.MeshPhysicalMaterial({
       color: accent,
-      metalness: 0.0,
-      roughness: 0.26,
-      clearcoat: 1.0,
-      clearcoatRoughness: 0.1,
-      envMapIntensity: 1.25,
+      metalness: 0.5,
+      roughness: 0.3,
+      clearcoat: 1,
+      clearcoatRoughness: 0.15,
       emissive: accent,
-      emissiveIntensity: 0,
+      emissiveIntensity: 0.05,
+      envMapIntensity: 1.1,
     })
-    disposables.push(segMat)
-    const segMesh = new THREE.Mesh(segGeo, segMat)
-    segMesh.userData.areaIndex = i
-    group.add(segMesh)
-    pickTargets.push(segMesh)
+    disposables.push(linerMat)
+    layer.add(new THREE.Mesh(linerGeo, linerMat))
 
-    // Bolt detail.
-    const boltGeo = new THREE.CylinderGeometry(0.085, 0.085, 0.06, 20)
-    boltGeo.rotateX(Math.PI / 2)
-    boltGeo.translate(0, 0, SEG_D / 2 + 0.02)
-    disposables.push(boltGeo)
-    const boltMat = new THREE.MeshPhysicalMaterial({
-      color: 0xaab2bd,
-      metalness: 1,
-      roughness: 0.22,
-      envMapIntensity: 1.6,
-    })
-    disposables.push(boltMat)
-    group.add(new THREE.Mesh(boltGeo, boltMat))
-
-    // Tool — chrome, folds out of the bottom of the segment.
+    // steel tool on a pivot
     const toolGeo = new THREE.ExtrudeGeometry(toolShape(area.tool), {
       depth: TOOL_DEPTH,
       bevelEnabled: true,
       bevelThickness: 0.02,
       bevelSize: 0.02,
       bevelSegments: 3,
-      curveSegments: 12,
+      curveSegments: 14,
       steps: 1,
     })
     toolGeo.translate(0, 0, -TOOL_DEPTH / 2)
-    toolGeo.scale(TOOL_SCALE, TOOL_SCALE, 1)
-    toolGeo.rotateZ(-Math.PI / 2) // point -Y (downward)
     disposables.push(toolGeo)
-
-    const toolMat = new THREE.MeshPhysicalMaterial(toolMatBase)
+    const toolMat = new THREE.MeshPhysicalMaterial(toolMatParams)
     disposables.push(toolMat)
     const toolMesh = new THREE.Mesh(toolGeo, toolMat)
     toolMesh.userData.areaIndex = i
-
-    const toolPivot = new THREE.Group()
-    toolPivot.position.set(0, -SEG_H / 2, 0)
-    toolPivot.add(toolMesh)
-    group.add(toolPivot)
     pickTargets.push(toolMesh)
 
-    parts.push({
-      group,
-      toolPivot,
-      segMat,
+    const pivot = new THREE.Group()
+    pivot.position.set(PIVOT_X, 0, 0)
+    pivot.rotation.z = CLOSED
+    pivot.add(toolMesh)
+    layer.add(pivot)
+
+    tools.push({
+      layer,
+      pivot,
       toolMat,
-      accent,
-      segExplode: new THREE.Vector3(segX(i) * 0.55, 0.85, (i - (N - 1) / 2) * 0.55),
-      toolExplode: new THREE.Vector3(0, -0.95, 0.5),
+      linerMat,
+      inlayMat: inlayMats[i],
+      baseZ: baseZs[i],
+      open: 0,
       hover: 0,
     })
   })
 
-  // ---- interaction state ----
+  // ---- interaction ----
   const raycaster = new THREE.Raycaster()
-  const pointer = new THREE.Vector2(0, 0)
-  const parallax = new THREE.Vector2(0, 0)
-  const parallaxTarget = new THREE.Vector2(0, 0)
+  const pointer = new THREE.Vector2()
+  const parallax = new THREE.Vector2()
+  const parallaxTarget = new THREE.Vector2()
+  const localHit = new THREE.Vector3()
   let stageHover = false
   let rayIndex = -1
   let externalIndex: number | null = null
   let reported: string | null = null
   let assembleScalar = 0
 
-  function activeIndex() {
-    return externalIndex !== null ? externalIndex : rayIndex
-  }
+  const activeIndex = () => (externalIndex !== null ? externalIndex : rayIndex)
 
   function report() {
     const idx = activeIndex()
@@ -264,20 +348,31 @@ export function createMultitool(
     }
   }
 
-  function updatePointer(e: PointerEvent) {
-    const rect = canvas.getBoundingClientRect()
-    const x = ((e.clientX - rect.left) / rect.width) * 2 - 1
-    const y = -((e.clientY - rect.top) / rect.height) * 2 + 1
-    pointer.set(x, y)
-    parallaxTarget.set(x, y)
-  }
-
   function onMove(e: PointerEvent) {
     stageHover = true
-    updatePointer(e)
+    const rect = canvas.getBoundingClientRect()
+    pointer.set(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    )
+    parallaxTarget.copy(pointer)
     raycaster.setFromCamera(pointer, camera)
     const hits = raycaster.intersectObjects(pickTargets, false)
-    rayIndex = hits.length ? (hits[0].object.userData.areaIndex as number) : -1
+    if (!hits.length) {
+      rayIndex = -1
+    } else {
+      const hit = hits[0]
+      const ai = hit.object.userData.areaIndex
+      if (typeof ai === 'number') {
+        rayIndex = ai
+      } else {
+        // Hit the handle scale — map the local X to one of the N zones.
+        localHit.copy(hit.point)
+        frontScaleMesh.worldToLocal(localHit)
+        const zone = Math.floor((localHit.x + HANDLE_L / 2) / zoneW)
+        rayIndex = Math.min(N - 1, Math.max(0, zone))
+      }
+    }
     report()
   }
   function onEnter() {
@@ -300,41 +395,30 @@ export function createMultitool(
   function applyFrame(t: number) {
     const idx = activeIndex()
     const wantAssembled = stageHover || externalIndex !== null
-
-    // Global assemble factor is derived from how assembled the parts are; we ease
-    // a single scalar and reuse it for every part.
     assembleScalar += ((wantAssembled ? 1 : 0) - assembleScalar) * 0.08
     const a = ease(assembleScalar)
 
     parallax.lerp(parallaxTarget, 0.06)
-    assembly.rotation.y = 0.26 * Math.sin(t * 0.25) + parallax.x * 0.32
-    assembly.rotation.x = 0.13 + 0.035 * Math.sin(t * 0.3) - parallax.y * 0.18
-    assembly.rotation.z = (1 - a) * 0.12 * Math.sin(t * 0.2)
+    assembly.rotation.y = 0.22 * Math.sin(t * 0.24) + parallax.x * 0.3
+    assembly.rotation.x = 0.06 + 0.03 * Math.sin(t * 0.3) - parallax.y * 0.14
+    assembly.rotation.z = (1 - a) * 0.05 * Math.sin(t * 0.2)
 
-    for (let i = 0; i < parts.length; i++) {
-      const p = parts[i]
+    // explode along the pin axis (Z)
+    for (const l of explodeLayers) {
+      l.obj.position.z = l.baseZ * (1 + EXPLODE_K * (1 - a))
+    }
+
+    for (let i = 0; i < tools.length; i++) {
+      const tool = tools[i]
       const target = idx === i ? 1 : 0
-      p.hover += (target - p.hover) * 0.14
-      const h = ease(p.hover)
+      tool.hover += (target - tool.hover) * 0.14
+      const h = ease(tool.hover)
+      const deploy = h * a // only deploy once assembled
 
-      // Explode ↔ assemble (translation only).
-      p.group.position.set(
-        segX(i) + p.segExplode.x * (1 - a),
-        p.segExplode.y * (1 - a),
-        p.segExplode.z * (1 - a) + h * 0.18 * a,
-      )
-      p.toolPivot.position.set(
-        p.toolExplode.x * (1 - a),
-        -SEG_H / 2 + p.toolExplode.y * (1 - a) - h * 0.12 * a,
-        p.toolExplode.z * (1 - a) + h * 0.2 * a,
-      )
-
-      // Stow factor: deployed when exploded OR when hovered while assembled.
-      const stow = a * (1 - h)
-      p.toolPivot.rotation.z = Math.PI * stow
-
-      p.segMat.emissiveIntensity = h * 0.28
-      p.toolMat.envMapIntensity = 1.7 + h * 0.6
+      tool.pivot.rotation.z = lerp(CLOSED, openAngle(i), deploy)
+      tool.toolMat.envMapIntensity = 1.7 + h * 0.6
+      tool.linerMat.emissiveIntensity = 0.05 + h * 0.4
+      if (tool.inlayMat) tool.inlayMat.emissiveIntensity = 0.08 + h * 0.7
     }
   }
 
