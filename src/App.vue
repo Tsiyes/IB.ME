@@ -33,14 +33,17 @@ function onLegendActivate(areaId: string, index: number) {
     <h1 class="sr-only">{{ profile.name }} — {{ profile.title }}</h1>
 
     <div
-      class="blurb-panel"
-      :class="{ on: !!activeArea }"
+      class="blurb-panel on"
       :style="activeArea ? { '--accent': activeArea.accent } : {}"
     >
       <Transition name="swap" mode="out-in">
         <div v-if="activeArea" :key="activeArea.id">
           <p class="panel-title">{{ activeArea.label }}</p>
           <p class="blurb">{{ activeArea.blurb }}</p>
+        </div>
+        <div v-else key="idle">
+          <p class="panel-title">{{ profile.name }}</p>
+          <p class="blurb">{{ profile.statement }}</p>
         </div>
       </Transition>
     </div>
