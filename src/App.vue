@@ -25,9 +25,11 @@ const active = computed(() => {
 })
 
 // Per-panel focus (1 when centred in the viewport, fading to 0 either side).
+// The 0.62 window keeps only one card prominent at a time so adjacent panels
+// don't visibly overlap during the cross-fade.
 function focus(index: number): number {
   const dist = Math.abs(scrollY.value - index * vh.value) / vh.value
-  return Math.min(1, Math.max(0, 1 - dist))
+  return Math.min(1, Math.max(0, 1 - dist / 0.62))
 }
 
 function panelStyle(index: number) {
@@ -36,6 +38,7 @@ function panelStyle(index: number) {
   return {
     opacity: String(eased),
     transform: `translateY(${(1 - eased) * 26}px)`,
+    pointerEvents: (eased > 0.6 ? 'auto' : 'none') as 'auto' | 'none',
   }
 }
 

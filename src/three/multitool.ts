@@ -225,7 +225,7 @@ export function createMultitool(canvas: HTMLCanvasElement): Multitool {
 
   let targetProgress = 0
   let progress = 0
-  const clock = new THREE.Clock()
+  const start = performance.now()
   let running = true
 
   function applyProgress(p: number, t: number) {
@@ -255,7 +255,7 @@ export function createMultitool(canvas: HTMLCanvasElement): Multitool {
     if (!running) return
     requestAnimationFrame(frame)
     progress += (targetProgress - progress) * 0.08
-    applyProgress(progress, clock.getElapsedTime())
+    applyProgress(progress, (performance.now() - start) / 1000)
     renderer.render(scene, camera)
   }
 
