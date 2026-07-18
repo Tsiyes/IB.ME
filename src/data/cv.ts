@@ -56,8 +56,8 @@ export const profile = {
 }
 
 export const contact = {
-  email: 'Isaaclbristow@gmail.com',
-  phone: '+44 7809 120716',
+  email: '',
+  phone: '',
   linkedin: 'linkedin.com/in/isaac-bristow',
   linkedinUrl: 'https://www.linkedin.com/in/isaac-bristow/',
 }

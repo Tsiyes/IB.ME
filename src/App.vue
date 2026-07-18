@@ -24,8 +24,6 @@ function hoverLegend(index: number | null) {
          accessibility / SEO only. -->
     <h1 class="sr-only">{{ profile.name }} — {{ profile.title }}</h1>
 
-    <p class="mono hovertip">Hover the tool to explode it · hover a coloured insert to deploy its tool</p>
-
     <div class="blurb-panel" :style="activeArea ? { '--accent': activeArea.accent } : {}">
       <Transition name="swap" mode="out-in">
         <div v-if="activeArea" :key="activeArea.id">

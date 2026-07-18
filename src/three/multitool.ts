@@ -171,7 +171,7 @@ export function createMultitool(
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.02).texture
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
-  camera.position.set(0.2, 0.9, 12)
+  camera.position.set(1, 0.9, 12)
   camera.lookAt(0.2, 0.7, 0)
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.45))
@@ -247,7 +247,7 @@ export function createMultitool(
     envMapIntensity: 0.5,
   })
   disposables.push(inkMat)
-  const RECESS = 0.04
+  const RECESS = 0.01
 
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
   const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
@@ -276,7 +276,7 @@ export function createMultitool(
 
   const lines: Array<{ text: string; size: number; y: number }> = [
     { text: sanitize(profile.name), size: 0.3, y: 0.12 },
-    { text: sanitize('Implementation / PM / Product / Development / QA'), size: 0.082, y: -0.14 },
+    { text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'), size: 0.082, y: -0.14 },
     { text: sanitize(contact.email), size: 0.082, y: -0.32 },
   ]
   const textGeos = lines.map((line) => {
@@ -489,7 +489,7 @@ export function createMultitool(
 
     parallax.lerp(parallaxTarget, 0.06)
     // Canted (3/4) at all times; swings a little further as it explodes.
-    assembly.rotation.y = 0.6 + 0.2 * explodeScalar + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
+    assembly.rotation.y = 0.0 + 0.0 * explodeScalar + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
     assembly.rotation.x = 0.3 + 0.12 * explodeScalar - parallax.y * 0.13 + 0.02 * Math.sin(t * 0.35)
     assembly.rotation.z = 0
     assembly.updateMatrixWorld(true)
