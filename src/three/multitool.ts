@@ -47,7 +47,7 @@ function toolRig(kind: ToolKind): ToolRig {
     case 'driver':
       // Right pin → swings out and slightly up (bottle-opener / flat driver).
       return { pivotX: PIVOT_X, closed: Math.PI, open: 0.38 }
-    case 'scissors':
+    case 'wrench':
       // Left pin → unfolds the other way so the fan reads from both ends.
       return { pivotX: -PIVOT_X, closed: 0, open: Math.PI * 0.78 }
     case 'saw':
@@ -119,32 +119,26 @@ function toolShape(kind: ToolKind): THREE.Shape {
       s.lineTo(0, -TOOL_TANG)
       break
     }
-    case 'scissors': {
-      // Spring-loaded SAK scissors in the open pose: fold pin beside the finger
-      // loop, blades out +X, lower lever angled down, V-spring between handles.
+    case 'wrench': {
+      // Open-ended spanner: slim shaft into a C-jaw head.
       s.moveTo(0, TOOL_TANG)
-      s.lineTo(0.2, 0.18)
-      s.lineTo(0.36, 0.34)
-      // Finger-loop exterior (top → forward nose)
-      s.absellipse(0.7, 0.08, 0.38, 0.26, Math.PI * 0.85, -Math.PI * 0.18, false, 0)
-      // Long upper handle into the upper blade and tip
-      s.lineTo(1.62, 0.12)
-      s.lineTo(2.38, 0.18)
-      s.lineTo(2.7, 0.01)
-      // Lower blade back to the scissors' rivet
-      s.lineTo(2.32, -0.13)
-      s.lineTo(1.78, -0.08)
-      // Lower lever (thicker arm angled down)
-      s.quadraticCurveTo(1.4, -0.22, 1.08, -0.48)
-      s.lineTo(0.84, -0.5)
-      s.lineTo(0.8, -0.32)
-      s.lineTo(1.12, -0.2)
-      // V-spring: seats on the lever, apex down, fixed under the upper handle
-      s.lineTo(1.22, -0.24)
-      s.lineTo(1.02, -0.1)
-      s.lineTo(0.58, -0.02)
-      s.lineTo(0.34, -0.08)
-      s.lineTo(0.18, -0.16)
+      s.lineTo(0.45, 0.13)
+      s.lineTo(1.85, 0.13)
+      // Upper jaw
+      s.lineTo(2.1, 0.36)
+      s.lineTo(2.52, 0.4)
+      s.lineTo(2.68, 0.22)
+      s.lineTo(2.42, 0.07)
+      // Mouth of the wrench
+      s.lineTo(2.28, 0.07)
+      s.lineTo(2.28, -0.07)
+      s.lineTo(2.42, -0.07)
+      // Lower jaw
+      s.lineTo(2.68, -0.22)
+      s.lineTo(2.52, -0.4)
+      s.lineTo(2.1, -0.36)
+      s.lineTo(1.85, -0.13)
+      s.lineTo(0.45, -0.13)
       s.lineTo(0, -TOOL_TANG)
       break
     }
@@ -189,17 +183,6 @@ function toolShape(kind: ToolKind): THREE.Shape {
   const hole = new THREE.Path()
   hole.absarc(0, 0, TOOL_HOLE, 0, Math.PI * 2, true)
   s.holes.push(hole)
-
-  if (kind === 'scissors') {
-    // Finger loop
-    const loop = new THREE.Path()
-    loop.absellipse(0.72, 0.1, 0.22, 0.14, 0, Math.PI * 2, true, 0)
-    s.holes.push(loop)
-    // Scissors' own pivot rivet
-    const rivet = new THREE.Path()
-    rivet.absarc(1.68, -0.02, 0.07, 0, Math.PI * 2, true)
-    s.holes.push(rivet)
-  }
 
   if (kind === 'blade') {
     // Nail nick
@@ -267,8 +250,8 @@ export function createMultitool(
   scene.add(rim)
 
   const assembly = new THREE.Group()
-  assembly.scale.setScalar(0.765) // ~15% smaller than the previous 0.9 scale
-  assembly.position.y = 1.15 // top-centre of the hero viewport
+  assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame
+  assembly.position.y = 0.82 // slightly lower so extended tools don't clip the top
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
@@ -515,7 +498,7 @@ export function createMultitool(
       bevelThickness: 0.02,
       bevelSize: 0.02,
       bevelSegments: 3,
-      curveSegments: area.tool === 'scissors' ? 20 : 14,
+      curveSegments: 14,
       steps: 1,
     })
     toolGeo.translate(0, 0, -TOOL_DEPTH / 2)
