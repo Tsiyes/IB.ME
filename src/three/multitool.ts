@@ -2,6 +2,8 @@ import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import helvetiker from '../assets/helvetiker_bold.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 
@@ -232,15 +234,21 @@ export function createMultitool(
     return { group, mesh }
   }
 
-  const front = makeScale(0.52)
   const back = makeScale(-0.52)
-  // Scales are pickable so hovering the casing explodes the tool without
-  // deploying anything (they carry no areaIndex).
-  pickTargets.push(front.mesh, back.mesh)
+  pickTargets.push(back.mesh)
 
-  // ---- identity engraved into the front cover as real 3D lettering ----
-  // Static (set on load); raised metal glyphs give the plate genuine depth. Kept
-  // clear of the bored rod holes at x = ±PIVOT_X.
+  // ---- front cover with the identity CUT INTO it (CSG subtraction) ----
+  // The lettering is a real recess in the plate; the cavity walls use a dark
+  // "ink" material. Static, and kept clear of the bored rod holes at ±PIVOT_X.
+  const inkMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0f13,
+    metalness: 0.3,
+    roughness: 0.85,
+    envMapIntensity: 0.5,
+  })
+  disposables.push(inkMat)
+  const RECESS = 0.09
+
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
   const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
   const sanitize = (text: string) =>
@@ -248,38 +256,71 @@ export function createMultitool(
       .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
       .join('')
 
-  const engraveMat = new THREE.MeshStandardMaterial({
-    color: 0x9aa3af,
-    metalness: 0.95,
-    roughness: 0.38,
-    envMapIntensity: 1.4,
+  const frontShape = panelShape(HANDLE_L, HANDLE_H)
+  addPinHoles(frontShape)
+  const frontGeo = new THREE.ExtrudeGeometry(frontShape, {
+    depth: SCALE_D,
+    bevelEnabled: true,
+    bevelThickness: 0.06,
+    bevelSize: 0.06,
+    bevelSegments: 5,
+    curveSegments: 22,
+    steps: 1,
   })
-  disposables.push(engraveMat)
+  frontGeo.translate(0, 0, -SCALE_D / 2)
+  frontGeo.computeBoundingBox()
+  // Actual front surface of the cover (accounts for the bevel), so the cut is
+  // guaranteed to open at the surface and recess RECESS deep.
+  const surfaceZ = frontGeo.boundingBox!.max.z
+  const textDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
 
-  const faceZ = SCALE_D / 2 + 0.06 // sit on the scale's beveled front surface
-  const engraveLines: Array<{ text: string; size: number; y: number }> = [
+  const lines: Array<{ text: string; size: number; y: number }> = [
     { text: sanitize(profile.name), size: 0.3, y: 0.12 },
-    { text: sanitize('Implementation / PM / Product / Development / QA'), size: 0.082, y: -0.16 },
-    { text: sanitize(contact.email), size: 0.082, y: -0.34 },
+    { text: sanitize('Implementation / PM / Product / Development / QA'), size: 0.082, y: -0.14 },
+    { text: sanitize(contact.email), size: 0.082, y: -0.32 },
   ]
-  for (const line of engraveLines) {
+  const textGeos = lines.map((line) => {
     const geo = new TextGeometry(line.text, {
       font,
       size: line.size,
-      depth: 0.028,
+      depth: textDepth,
       curveSegments: 4,
-      bevelEnabled: true,
-      bevelThickness: 0.004,
-      bevelSize: 0.004,
-      bevelSegments: 1,
+      bevelEnabled: false,
     })
     geo.computeBoundingBox()
     const bb = geo.boundingBox!
     const cx = (bb.max.x - bb.min.x) / 2 + bb.min.x
-    geo.translate(-cx, line.y, faceZ)
-    disposables.push(geo)
-    front.group.add(new THREE.Mesh(geo, engraveMat))
+    geo.translate(-cx, line.y, surfaceZ - RECESS)
+    return geo
+  })
+  const textGeo = mergeGeometries(textGeos, false)!
+  textGeos.forEach((g) => g.dispose())
+
+  // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
+  // (un-engraved) cover so the scene still renders.
+  let frontMesh: THREE.Mesh
+  try {
+    const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
+    const textBrush = new Brush(mergeVertices(textGeo), inkMat)
+    const evaluator = new Evaluator()
+    evaluator.useGroups = true
+    const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
+    result.material = [scaleMat, inkMat]
+    frontMesh = result
+  } catch (err) {
+    console.warn('[multitool] engraving CSG failed, using plain cover', err)
+    frontMesh = new THREE.Mesh(frontGeo.clone(), scaleMat)
   }
+  frontGeo.dispose()
+  textGeo.dispose()
+  disposables.push(frontMesh.geometry)
+
+  const frontGroup = new THREE.Group()
+  frontGroup.position.z = 0.52
+  frontGroup.add(frontMesh)
+  assembly.add(frontGroup)
+  explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
+  pickTargets.push(frontMesh)
 
   // ---- pivot + end pins (rods) ----
   const pins: THREE.Mesh[] = []
