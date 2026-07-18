@@ -14,6 +14,7 @@ import { areas, contact, profile, type ToolKind } from '../data/cv'
 const HANDLE_L = 5.0
 const HANDLE_H = 1.5
 const PIVOT_X = HANDLE_L / 2 - 0.9 // end pin the tools rotate on
+const PIN_R = 0.12
 const N = areas.length
 // Accordion explosion + proximity gating.
 const GAP = 0.52 // base spacing between layers when exploded
@@ -58,6 +59,15 @@ function panelShape(l: number, h: number, inset = 0): THREE.Shape {
   s.lineTo(x, y + r)
   s.quadraticCurveTo(x, y, x + r, y)
   return s
+}
+
+// Bore clearance holes for the two rods through a plate outline.
+function addPinHoles(shape: THREE.Shape) {
+  for (const px of [PIVOT_X, -PIVOT_X]) {
+    const h = new THREE.Path()
+    h.absarc(px, 0, PIN_R + 0.03, 0, Math.PI * 2, true)
+    shape.holes.push(h)
+  }
 }
 
 // Each tool is a folding implement with a rounded tang + pivot hole at the
@@ -197,7 +207,9 @@ export function createMultitool(
 
   // ---- scales (front/back covers) ----
   function makeScale(z: number) {
-    const geo = new THREE.ExtrudeGeometry(panelShape(HANDLE_L, HANDLE_H), {
+    const shape = panelShape(HANDLE_L, HANDLE_H)
+    addPinHoles(shape)
+    const geo = new THREE.ExtrudeGeometry(shape, {
       depth: SCALE_D,
       bevelEnabled: true,
       bevelThickness: 0.06,
@@ -232,7 +244,9 @@ export function createMultitool(
   plateTex.colorSpace = THREE.SRGBColorSpace
   plateTex.anisotropy = 4
   const plateGeo = new THREE.PlaneGeometry(4.4, 1.06)
-  plateGeo.translate(0, 0, SCALE_D / 2 + 0.021)
+  // Sit clearly in front of the scale's beveled front surface so the engraving
+  // isn't occluded by the bevel lip.
+  plateGeo.translate(0, 0, SCALE_D / 2 + 0.12)
   disposables.push(plateGeo)
   const plateMat = new THREE.MeshBasicMaterial({
     map: plateTex,
@@ -288,13 +302,16 @@ export function createMultitool(
   }
   drawPlate(-1)
 
-  // ---- pivot + end pins ----
+  // ---- pivot + end pins (rods) ----
+  const pins: THREE.Mesh[] = []
   function makePin(x: number) {
-    const geo = new THREE.CylinderGeometry(0.12, 0.12, 1.2, 24)
+    const geo = new THREE.CylinderGeometry(PIN_R, PIN_R, 1.2, 24)
     geo.rotateX(Math.PI / 2)
     geo.translate(x, 0, 0)
     disposables.push(geo)
-    assembly.add(new THREE.Mesh(geo, boltMat))
+    const mesh = new THREE.Mesh(geo, boltMat)
+    pins.push(mesh)
+    assembly.add(mesh)
   }
   makePin(PIVOT_X)
   makePin(-PIVOT_X)
@@ -321,7 +338,9 @@ export function createMultitool(
     // colored liner — a full handle-shaped plate whose coloured rim is visible
     // between the scales (canted view) and which is the hover target that deploys
     // this area's tool.
-    const linerGeo = new THREE.ExtrudeGeometry(panelShape(HANDLE_L, HANDLE_H, 0.02), {
+    const linerShape = panelShape(HANDLE_L, HANDLE_H, 0.02)
+    addPinHoles(linerShape)
+    const linerGeo = new THREE.ExtrudeGeometry(linerShape, {
       depth: LINER_D,
       bevelEnabled: true,
       bevelThickness: 0.02,
@@ -490,6 +509,9 @@ export function createMultitool(
       const target = positions[o] - mean
       ordered[o].obj.position.z = lerp(ordered[o].baseZ, target, a)
     }
+
+    // Rods lengthen as the plates spread so they keep threading through the holes.
+    for (const p of pins) p.scale.z = 1 + a * 2.6
 
     for (let i = 0; i < tools.length; i++) {
       const tool = tools[i]

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
 
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
+
+const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
 
 function onAreaChange(id: string | null) {
   activeId.value = id
@@ -18,20 +20,18 @@ function hoverLegend(index: number | null) {
   <section class="hero">
     <ToolScene :force-area="forceArea" @area-change="onAreaChange" />
 
-    <header class="masthead">
-      <p class="mono kicker">CV · IMPLEMENTATION / PM / PRODUCT / DEVELOPMENT / QA</p>
-      <h1>{{ profile.name }}<span class="creds">{{ profile.creds }}</span></h1>
-      <p class="role">{{ profile.title }}</p>
-      <ul class="contact mono">
-        <li>{{ contact.email }}</li>
-        <li>{{ contact.phone }}</li>
-        <li>
-          <a :href="contact.linkedinUrl" target="_blank" rel="noopener">{{ contact.linkedin }}</a>
-        </li>
-      </ul>
-    </header>
+    <!-- Identity is engraved on the tool's face plate; this heading is for
+         accessibility / SEO only. -->
+    <h1 class="sr-only">{{ profile.name }} — {{ profile.title }}</h1>
 
     <p class="mono hovertip">Hover the tool to explode it · hover a coloured insert to deploy its tool</p>
+
+    <div class="blurb-panel" :style="activeArea ? { '--accent': activeArea.accent } : {}">
+      <Transition name="swap" mode="out-in">
+        <p v-if="activeArea" :key="activeArea.id" class="blurb">{{ activeArea.blurb }}</p>
+        <p v-else key="idle" class="blurb">{{ profile.statement }}</p>
+      </Transition>
+    </div>
 
     <!-- Accessible legend that also drives the 3D scene -->
     <nav class="legend" aria-label="Specialist areas">
@@ -125,8 +125,13 @@ function hoverLegend(index: number | null) {
       </div>
     </section>
 
-    <footer class="foot mono muted">
-      Built with Vue 3 + Three.js · WebGL, static &amp; free to host.
+    <footer class="foot mono">
+      <p class="foot-contact">
+        <span>{{ contact.email }}</span>
+        <span>{{ contact.phone }}</span>
+        <a :href="contact.linkedinUrl" target="_blank" rel="noopener">{{ contact.linkedin }}</a>
+      </p>
+      <p class="muted">Built with Vue 3 + Three.js · WebGL, static &amp; free to host.</p>
     </footer>
   </main>
 </template>
@@ -140,55 +145,28 @@ function hoverLegend(index: number | null) {
   overflow: hidden;
 }
 
-.masthead {
+.sr-only {
   position: absolute;
-  top: clamp(20px, 4vw, 46px);
-  left: clamp(20px, 4vw, 52px);
-  z-index: 2;
-  max-width: min(46ch, 70vw);
-  pointer-events: none;
-}
-.masthead .contact {
-  pointer-events: auto;
-}
-.kicker {
-  color: var(--accent, #3b82f6);
-  font-size: 0.72rem;
-  letter-spacing: 0.06em;
-  margin: 0 0 8px;
-}
-h1 {
-  font-size: clamp(2.2rem, 5.4vw, 3.6rem);
-  letter-spacing: -0.025em;
-  line-height: 1;
-  margin: 0;
-}
-.creds {
-  margin-left: 10px;
-  font-family: var(--mono);
-  font-size: 0.32em;
-  color: var(--muted);
-  vertical-align: middle;
-}
-.role {
-  margin: 8px 0 0;
-  color: var(--ink-soft);
-  font-size: 0.9rem;
-}
-.contact {
-  list-style: none;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
+  width: 1px;
+  height: 1px;
   padding: 0;
-  margin: 14px 0 0;
-  font-size: 0.72rem;
-  color: var(--muted);
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-.contact a {
-  color: var(--ink);
-  text-decoration: none;
-  border-bottom: 1px solid var(--line-strong);
+
+.blurb-panel {
+  --accent: #3b82f6;
+  position: absolute;
+  left: clamp(20px, 4vw, 52px);
+  bottom: clamp(70px, 12vh, 110px);
+  z-index: 2;
+  max-width: min(40ch, 74vw);
+  border-left: 2px solid var(--accent);
+  padding-left: 14px;
+  pointer-events: none;
 }
 
 .hovertip {
@@ -428,6 +406,19 @@ h1 {
   font-size: 0.72rem;
   padding-top: 20px;
   border-top: 1px solid var(--line);
+}
+.foot-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  justify-content: center;
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+}
+.foot-contact a {
+  color: var(--ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--line-strong);
 }
 
 .swap-enter-active,
