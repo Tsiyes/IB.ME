@@ -28,8 +28,14 @@ function hoverLegend(index: number | null) {
 
     <div class="blurb-panel" :style="activeArea ? { '--accent': activeArea.accent } : {}">
       <Transition name="swap" mode="out-in">
-        <p v-if="activeArea" :key="activeArea.id" class="blurb">{{ activeArea.blurb }}</p>
-        <p v-else key="idle" class="blurb">{{ profile.statement }}</p>
+        <div v-if="activeArea" :key="activeArea.id">
+          <p class="panel-title">{{ activeArea.label }}</p>
+          <p class="blurb">{{ activeArea.blurb }}</p>
+        </div>
+        <div v-else key="idle">
+          <p class="panel-title">{{ profile.name }}</p>
+          <p class="blurb">{{ profile.statement }}</p>
+        </div>
       </Transition>
     </div>
 
@@ -167,6 +173,13 @@ function hoverLegend(index: number | null) {
   border-left: 2px solid var(--accent);
   padding-left: 14px;
   pointer-events: none;
+}
+.panel-title {
+  margin: 0 0 6px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .hovertip {

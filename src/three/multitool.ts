@@ -1,5 +1,8 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
+import helvetiker from '../assets/helvetiker_bold.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 
 // -----------------------------------------------------------------------------
@@ -235,72 +238,48 @@ export function createMultitool(
   // deploying anything (they carry no areaIndex).
   pickTargets.push(front.mesh, back.mesh)
 
-  // ---- engraved face plate (metadata rendered onto the front cover) ----
-  const plateCanvas = document.createElement('canvas')
-  plateCanvas.width = 1400
-  plateCanvas.height = 360
-  const plateCtx = plateCanvas.getContext('2d')!
-  const plateTex = new THREE.CanvasTexture(plateCanvas)
-  plateTex.colorSpace = THREE.SRGBColorSpace
-  plateTex.anisotropy = 4
-  const plateGeo = new THREE.PlaneGeometry(4.4, 1.06)
-  // Sit clearly in front of the scale's beveled front surface so the engraving
-  // isn't occluded by the bevel lip.
-  plateGeo.translate(0, 0, SCALE_D / 2 + 0.12)
-  disposables.push(plateGeo)
-  const plateMat = new THREE.MeshBasicMaterial({
-    map: plateTex,
-    transparent: true,
-    depthWrite: false,
+  // ---- identity engraved into the front cover as real 3D lettering ----
+  // Static (set on load); raised metal glyphs give the plate genuine depth. Kept
+  // clear of the bored rod holes at x = ±PIVOT_X.
+  const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
+  const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
+  const sanitize = (text: string) =>
+    Array.from(text)
+      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
+      .join('')
+
+  const engraveMat = new THREE.MeshStandardMaterial({
+    color: 0x9aa3af,
+    metalness: 0.95,
+    roughness: 0.38,
+    envMapIntensity: 1.4,
   })
-  disposables.push(plateMat, plateTex)
-  front.group.add(new THREE.Mesh(plateGeo, plateMat))
+  disposables.push(engraveMat)
 
-  function wrapLine(text: string, font: string, color: string, x: number, y: number, maxW: number) {
-    plateCtx.font = font
-    plateCtx.fillStyle = color
-    const words = text.split(' ')
-    let line = ''
-    let yy = y
-    for (const w of words) {
-      const test = line ? line + ' ' + w : w
-      if (plateCtx.measureText(test).width > maxW && line) {
-        plateCtx.fillText(line, x, yy)
-        line = w
-        yy += 46
-      } else {
-        line = test
-      }
-    }
-    plateCtx.fillText(line, x, yy)
+  const faceZ = SCALE_D / 2 + 0.06 // sit on the scale's beveled front surface
+  const engraveLines: Array<{ text: string; size: number; y: number }> = [
+    { text: sanitize(profile.name), size: 0.3, y: 0.12 },
+    { text: sanitize('Implementation / PM / Product / Development / QA'), size: 0.082, y: -0.16 },
+    { text: sanitize(contact.email), size: 0.082, y: -0.34 },
+  ]
+  for (const line of engraveLines) {
+    const geo = new TextGeometry(line.text, {
+      font,
+      size: line.size,
+      depth: 0.028,
+      curveSegments: 4,
+      bevelEnabled: true,
+      bevelThickness: 0.004,
+      bevelSize: 0.004,
+      bevelSegments: 1,
+    })
+    geo.computeBoundingBox()
+    const bb = geo.boundingBox!
+    const cx = (bb.max.x - bb.min.x) / 2 + bb.min.x
+    geo.translate(-cx, line.y, faceZ)
+    disposables.push(geo)
+    front.group.add(new THREE.Mesh(geo, engraveMat))
   }
-
-  function drawPlate(idx: number) {
-    const ctx = plateCtx
-    ctx.clearRect(0, 0, plateCanvas.width, plateCanvas.height)
-    ctx.textBaseline = 'top'
-    const pad = 60
-    if (idx < 0) {
-      ctx.fillStyle = '#eaf0f6'
-      ctx.font = 'bold 128px Inter, system-ui, sans-serif'
-      ctx.fillText(profile.name, pad, 66)
-      ctx.fillStyle = '#9fb0c4'
-      ctx.font = '46px ui-monospace, monospace'
-      ctx.fillText(profile.title, pad, 214)
-      ctx.fillText(contact.email, pad, 276)
-    } else {
-      const area = areas[idx]
-      ctx.fillStyle = area.accent
-      ctx.font = 'bold 48px ui-monospace, monospace'
-      ctx.fillText(`TOOL ${area.code} · ${area.toolName.toUpperCase()}`, pad, 52)
-      ctx.fillStyle = '#f2f6fb'
-      ctx.font = 'bold 118px Inter, system-ui, sans-serif'
-      ctx.fillText(area.label, pad, 108)
-      wrapLine(area.tagline, '44px ui-monospace, monospace', '#b9c4d2', pad, 250, plateCanvas.width - pad * 2)
-    }
-    plateTex.needsUpdate = true
-  }
-  drawPlate(-1)
 
   // ---- pivot + end pins (rods) ----
   const pins: THREE.Mesh[] = []
@@ -400,8 +379,10 @@ export function createMultitool(
     })
   })
 
-  // Layers ordered front→back along the pin axis, for the accordion explosion.
-  const ordered = [...explodeLayers].sort((a, b) => b.baseZ - a.baseZ)
+  // Layers ordered back→front along the pin axis. Ascending baseZ keeps the
+  // engraved front cover frontmost when exploded (previously it inverted, so the
+  // engraving ended up on the back plate).
+  const ordered = [...explodeLayers].sort((a, b) => a.baseZ - b.baseZ)
   const M = ordered.length
   const center = (M - 1) / 2
 
@@ -423,7 +404,6 @@ export function createMultitool(
     const id = idx >= 0 ? areas[idx].id : null
     if (id !== reported) {
       reported = id
-      drawPlate(idx)
       options.onAreaChange?.(id)
     }
   }

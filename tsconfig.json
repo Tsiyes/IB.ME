@@ -3,6 +3,7 @@
   "compilerOptions": {
     "composite": false,
     "baseUrl": ".",
+    "resolveJsonModule": true,
     "types": ["vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.vue"],
