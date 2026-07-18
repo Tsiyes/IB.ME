@@ -3,9 +3,6 @@ import { computed, ref } from 'vue'
 import { profile, tools } from '../data/cv'
 import ToolShape from './ToolShape.vue'
 
-const PIVOT_X = 515
-const PIVOT_Y = 300
-
 // Which tools are currently folded open. Multiple can be open at once so the
 // knife can be "fanned out" and fiddled with.
 const openIds = ref<Set<string>>(new Set())
@@ -18,9 +15,12 @@ function isOpen(id: string) {
   return openIds.value.has(id)
 }
 
-function transformFor(id: string, openAngle: number) {
+// Rotation is applied via the CSS `transform` property (not the SVG transform
+// attribute) so it animates smoothly. `transform-origin` is pinned to the pivot
+// in view-box units via CSS below.
+function styleFor(id: string, openAngle: number) {
   const angle = isOpen(id) ? openAngle : 0
-  return `rotate(${angle} ${PIVOT_X} ${PIVOT_Y})`
+  return { transform: `rotate(${angle}deg)` }
 }
 
 function toggle(id: string) {
@@ -87,7 +87,7 @@ function foldAll() {
             :key="tool.id"
             class="tool"
             :class="{ open: isOpen(tool.id), active: activeId === tool.id }"
-            :transform="transformFor(tool.id, tool.openAngle)"
+            :style="styleFor(tool.id, tool.openAngle)"
             role="button"
             tabindex="0"
             :aria-pressed="isOpen(tool.id)"
@@ -220,7 +220,8 @@ function foldAll() {
   cursor: pointer;
   transition: transform 620ms cubic-bezier(0.22, 1, 0.36, 1);
   transform-box: view-box;
-  transform-origin: center;
+  /* Pivot pin location in view-box units — all tools swing around this point. */
+  transform-origin: 515px 300px;
 }
 .tool :deep(.steel) {
   fill: url(#steel);
