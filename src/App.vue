@@ -3,10 +3,13 @@ import { computed, ref, watch } from 'vue'
 import BotCheck from './components/BotCheck.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
+import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const unlocked = ref(false)
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
+const visits = ref<number | null>(null)
+const botsBounced = ref<number | null>(null)
 
 const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
 
@@ -18,8 +21,16 @@ watch(
   { immediate: true },
 )
 
+function syncCounters() {
+  const snap = getCachedCounters()
+  visits.value = snap.visits
+  botsBounced.value = snap.botsBounced
+}
+
 function onUnlocked() {
   unlocked.value = true
+  syncCounters()
+  void loadCounters().then(syncCounters)
 }
 function onAreaChange(id: string | null) {
   activeId.value = id
@@ -169,6 +180,11 @@ function onLegendActivate(areaId: string, index: number) {
         <span>{{ contact.email }}</span>
         <span>{{ contact.phone }}</span>
         <a :href="contact.linkedinUrl" target="_blank" rel="noopener">{{ contact.linkedin }}</a>
+      </p>
+      <p class="tally muted">
+        <span>Visits {{ formatCount(visits) }}</span>
+        <span class="sep" aria-hidden="true">·</span>
+        <span>Bots bounced {{ formatCount(botsBounced) }}</span>
       </p>
       <p class="muted">Built with Vue 3 + Three.js · WebGL, static &amp; free to host.</p>
     </footer>
@@ -522,6 +538,18 @@ function onLegendActivate(areaId: string, index: number) {
   color: var(--ink);
   text-decoration: none;
   border-bottom: 1px solid var(--line-strong);
+}
+.foot .tally {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  justify-content: center;
+  margin: 0 0 8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.foot .tally .sep {
+  opacity: 0.55;
 }
 
 .swap-enter-active,
