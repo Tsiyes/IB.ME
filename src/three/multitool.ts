@@ -102,9 +102,6 @@ interface ToolNode {
   pivot: THREE.Group // rotates to deploy the tool
   toolMat: THREE.MeshPhysicalMaterial
   linerMat: THREE.MeshPhysicalMaterial
-  inlayMat: THREE.MeshPhysicalMaterial
-  baseZ: number
-  open: number
   hover: number
 }
 
@@ -152,6 +149,7 @@ export function createMultitool(
   scene.add(rim)
 
   const assembly = new THREE.Group()
+  assembly.scale.setScalar(0.9) // ~10% smaller
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
@@ -198,41 +196,10 @@ export function createMultitool(
   }
 
   const front = makeScale(0.52)
-  makeScale(-0.52)
-  pickTargets.push(front.mesh)
-  const frontScaleMesh = front.mesh
-
-  // ---- colored zone inlays on the front scale (visual segmentation) ----
-  const zoneW = HANDLE_L / N
-  const inlayMats: THREE.MeshPhysicalMaterial[] = []
-  areas.forEach((area, i) => {
-    const cx = -HANDLE_L / 2 + zoneW * (i + 0.5)
-    const geo = new THREE.ExtrudeGeometry(stadium(zoneW * 0.66, 0.34), {
-      depth: 0.04,
-      bevelEnabled: true,
-      bevelThickness: 0.02,
-      bevelSize: 0.02,
-      bevelSegments: 2,
-      curveSegments: 12,
-      steps: 1,
-    })
-    geo.translate(cx, 0.42, SCALE_D / 2 + 0.02)
-    disposables.push(geo)
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: new THREE.Color(area.accent),
-      metalness: 0.4,
-      roughness: 0.25,
-      clearcoat: 1,
-      clearcoatRoughness: 0.12,
-      emissive: new THREE.Color(area.accent),
-      emissiveIntensity: 0.08,
-      envMapIntensity: 1.2,
-    })
-    disposables.push(mat)
-    const mesh = new THREE.Mesh(geo, mat)
-    front.group.add(mesh)
-    inlayMats.push(mat)
-  })
+  const back = makeScale(-0.52)
+  // Scales are pickable so hovering the casing explodes the tool without
+  // deploying anything (they carry no areaIndex).
+  pickTargets.push(front.mesh, back.mesh)
 
   // ---- pivot + end pins ----
   function makePin(x: number) {
@@ -264,8 +231,10 @@ export function createMultitool(
     assembly.add(layer)
     explodeLayers.push({ obj: layer, baseZ: baseZs[i] })
 
-    // colored liner (handle-shaped plate, behind the tool)
-    const linerGeo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H, 0.12), {
+    // colored liner — a full handle-shaped plate whose coloured rim is visible
+    // between the scales (canted view) and which is the hover target that deploys
+    // this area's tool.
+    const linerGeo = new THREE.ExtrudeGeometry(stadium(HANDLE_L, HANDLE_H, 0.02), {
       depth: LINER_D,
       bevelEnabled: true,
       bevelThickness: 0.02,
@@ -274,7 +243,7 @@ export function createMultitool(
       curveSegments: 20,
       steps: 1,
     })
-    linerGeo.translate(0, 0, -LINER_D / 2 - 0.08)
+    linerGeo.translate(0, 0, -LINER_D / 2 - 0.05)
     disposables.push(linerGeo)
     const linerMat = new THREE.MeshPhysicalMaterial({
       color: accent,
@@ -283,11 +252,14 @@ export function createMultitool(
       clearcoat: 1,
       clearcoatRoughness: 0.15,
       emissive: accent,
-      emissiveIntensity: 0.05,
+      emissiveIntensity: 0.06,
       envMapIntensity: 1.1,
     })
     disposables.push(linerMat)
-    layer.add(new THREE.Mesh(linerGeo, linerMat))
+    const linerMesh = new THREE.Mesh(linerGeo, linerMat)
+    linerMesh.userData.areaIndex = i
+    layer.add(linerMesh)
+    pickTargets.push(linerMesh)
 
     // steel tool on a pivot
     const toolGeo = new THREE.ExtrudeGeometry(toolShape(area.tool), {
@@ -318,9 +290,6 @@ export function createMultitool(
       pivot,
       toolMat,
       linerMat,
-      inlayMat: inlayMats[i],
-      baseZ: baseZs[i],
-      open: 0,
       hover: 0,
     })
   })
@@ -330,12 +299,11 @@ export function createMultitool(
   const pointer = new THREE.Vector2()
   const parallax = new THREE.Vector2()
   const parallaxTarget = new THREE.Vector2()
-  const localHit = new THREE.Vector3()
   let stageHover = false
   let rayIndex = -1
   let externalIndex: number | null = null
   let reported: string | null = null
-  let assembleScalar = 0
+  let explodeScalar = 0
 
   const activeIndex = () => (externalIndex !== null ? externalIndex : rayIndex)
 
@@ -358,21 +326,10 @@ export function createMultitool(
     parallaxTarget.copy(pointer)
     raycaster.setFromCamera(pointer, camera)
     const hits = raycaster.intersectObjects(pickTargets, false)
-    if (!hits.length) {
-      rayIndex = -1
-    } else {
-      const hit = hits[0]
-      const ai = hit.object.userData.areaIndex
-      if (typeof ai === 'number') {
-        rayIndex = ai
-      } else {
-        // Hit the handle scale — map the local X to one of the N zones.
-        localHit.copy(hit.point)
-        frontScaleMesh.worldToLocal(localHit)
-        const zone = Math.floor((localHit.x + HANDLE_L / 2) / zoneW)
-        rayIndex = Math.min(N - 1, Math.max(0, zone))
-      }
-    }
+    // Only coloured liners / tools carry an areaIndex; hitting a bare scale
+    // explodes the tool but deploys nothing.
+    const ai = hits.length ? hits[0].object.userData.areaIndex : undefined
+    rayIndex = typeof ai === 'number' ? ai : -1
     report()
   }
   function onEnter() {
@@ -394,20 +351,22 @@ export function createMultitool(
 
   function applyFrame(t: number) {
     const idx = activeIndex()
-    const wantAssembled = stageHover || externalIndex !== null
-    assembleScalar += ((wantAssembled ? 1 : 0) - assembleScalar) * 0.08
-    const a = ease(assembleScalar)
+    // Hovering (or a legend selection) gradually EXPLODES the tool; at rest it
+    // stays assembled.
+    const wantExplode = stageHover || externalIndex !== null
+    explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
+    const a = ease(explodeScalar)
 
     parallax.lerp(parallaxTarget, 0.06)
-    // Exploded → swung to a 3/4 view so the layer separation along the pin axis
-    // is clearly visible; assembled → face-on so it reads as a closed penknife.
-    assembly.rotation.y = lerp(0.82, 0.04, a) + parallax.x * 0.28 + 0.05 * Math.sin(t * 0.3)
-    assembly.rotation.x = lerp(0.5, 0.06, a) - parallax.y * 0.14 + 0.02 * Math.sin(t * 0.35)
+    // Always shown canted (3/4) so the coloured inserts read even when assembled;
+    // swings a little further as it explodes.
+    assembly.rotation.y = 0.6 + 0.2 * a + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
+    assembly.rotation.x = 0.3 + 0.12 * a - parallax.y * 0.13 + 0.02 * Math.sin(t * 0.35)
     assembly.rotation.z = 0
 
     // explode along the pin axis (Z)
     for (const l of explodeLayers) {
-      l.obj.position.z = l.baseZ * (1 + EXPLODE_K * (1 - a))
+      l.obj.position.z = l.baseZ * (1 + EXPLODE_K * a)
     }
 
     for (let i = 0; i < tools.length; i++) {
@@ -415,12 +374,11 @@ export function createMultitool(
       const target = idx === i ? 1 : 0
       tool.hover += (target - tool.hover) * 0.14
       const h = ease(tool.hover)
-      const deploy = h * a // only deploy once assembled
+      const deploy = h * a // deploy the tool once the casing has opened up
 
       tool.pivot.rotation.z = lerp(CLOSED, openAngle(i), deploy)
       tool.toolMat.envMapIntensity = 1.7 + h * 0.6
-      tool.linerMat.emissiveIntensity = 0.05 + h * 0.4
-      if (tool.inlayMat) tool.inlayMat.emissiveIntensity = 0.08 + h * 0.7
+      tool.linerMat.emissiveIntensity = 0.06 + h * 0.5
     }
   }
 
