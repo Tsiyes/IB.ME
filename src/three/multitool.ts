@@ -15,7 +15,7 @@ const HANDLE_L = 5.0
 const HANDLE_H = 1.5
 const PIVOT_X = HANDLE_L / 2 - 0.9 // end pin the tools rotate on
 const N = areas.length
-const EXPLODE_K = 2.4
+const EXPLODE_K = 2.8
 
 const TOOL_TANG = 0.28
 const TOOL_HOLE = 0.1
@@ -399,9 +399,11 @@ export function createMultitool(
     const a = ease(assembleScalar)
 
     parallax.lerp(parallaxTarget, 0.06)
-    assembly.rotation.y = 0.22 * Math.sin(t * 0.24) + parallax.x * 0.3
-    assembly.rotation.x = 0.06 + 0.03 * Math.sin(t * 0.3) - parallax.y * 0.14
-    assembly.rotation.z = (1 - a) * 0.05 * Math.sin(t * 0.2)
+    // Exploded → swung to a 3/4 view so the layer separation along the pin axis
+    // is clearly visible; assembled → face-on so it reads as a closed penknife.
+    assembly.rotation.y = lerp(0.82, 0.04, a) + parallax.x * 0.28 + 0.05 * Math.sin(t * 0.3)
+    assembly.rotation.x = lerp(0.5, 0.06, a) - parallax.y * 0.14 + 0.02 * Math.sin(t * 0.35)
+    assembly.rotation.z = 0
 
     // explode along the pin axis (Z)
     for (const l of explodeLayers) {
