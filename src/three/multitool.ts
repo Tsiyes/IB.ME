@@ -171,8 +171,10 @@ export function createMultitool(
   scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.02).texture
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
-  camera.position.set(1, 0.9, 12)
-  camera.lookAt(0.2, 0.7, 0)
+  // Frame the tool in the upper-centre of the hero; look slightly below it so
+  // the blurb + legend can sit in the lower half without overlapping.
+  camera.position.set(0.55, 0.75, 12)
+  camera.lookAt(0, 0.05, 0)
 
   scene.add(new THREE.AmbientLight(0xffffff, 0.45))
   const key = new THREE.DirectionalLight(0xffffff, 2.5)
@@ -187,7 +189,7 @@ export function createMultitool(
 
   const assembly = new THREE.Group()
   assembly.scale.setScalar(0.9) // ~10% smaller
-  assembly.position.y = 0.45 // sit a touch higher in the hero viewport
+  assembly.position.y = 1.15 // top-centre of the hero viewport
   scene.add(assembly)
 
   const disposables: Array<{ dispose: () => void }> = []
