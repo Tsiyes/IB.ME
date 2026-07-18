@@ -6,6 +6,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import helvetiker from '../assets/helvetiker_bold.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
+import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -475,12 +476,24 @@ export function createMultitool(
   const parallax = new THREE.Vector2()
   const parallaxTarget = new THREE.Vector2()
   let stageHover = false
-  let rayIndex = -1
+  // Desired pick vs committed deploy — a short dwell + cooldown stops tools
+  // thrashing open/closed as the pointer grazes neighbouring liners.
+  let desiredIndex = -1
+  let pendingIndex = -1
+  let committedIndex = -1
+  let commitAt = 0
+  let lastDeployAt = -Infinity
   let externalIndex: number | null = null
   let reported: string | null = null
   let explodeScalar = 0
+  let lastAccordionStep = -1
+  let armedToolClick = false
 
-  const activeIndex = () => (externalIndex !== null ? externalIndex : rayIndex)
+  const HOVER_DELAY_MS = 140
+  const DEPLOY_COOLDOWN_MS = 320
+  const ACCORDION_CLICK_STEPS = Math.max(4, M - 1)
+
+  const activeIndex = () => (externalIndex !== null ? externalIndex : committedIndex)
 
   function report() {
     const idx = activeIndex()
@@ -491,7 +504,12 @@ export function createMultitool(
     }
   }
 
+  function requestIndex(next: number) {
+    desiredIndex = next
+  }
+
   function onMove(e: PointerEvent) {
+    unlockAudio()
     stageHover = true
     const rect = canvas.getBoundingClientRect()
     pointer.set(
@@ -504,39 +522,81 @@ export function createMultitool(
     // Only coloured liners / tools carry an areaIndex; hitting a bare scale
     // explodes the tool but deploys nothing.
     const ai = hits.length ? hits[0].object.userData.areaIndex : undefined
-    rayIndex = typeof ai === 'number' ? ai : -1
-    report()
+    requestIndex(typeof ai === 'number' ? ai : -1)
   }
   function onEnter() {
+    unlockAudio()
     stageHover = true
   }
   function onLeave() {
     stageHover = false
-    rayIndex = -1
+    requestIndex(-1)
     parallaxTarget.set(0, 0)
-    report()
+  }
+  function onPointerDown() {
+    unlockAudio()
   }
 
   canvas.addEventListener('pointermove', onMove)
   canvas.addEventListener('pointerenter', onEnter)
   canvas.addEventListener('pointerleave', onLeave)
+  canvas.addEventListener('pointerdown', onPointerDown)
 
   const start = performance.now()
   let running = true
 
   const tmp = new THREE.Vector3()
 
+  function settleCommitted(now: number) {
+    if (externalIndex !== null) {
+      // Legend / forced area bypasses dwell — intentional selection.
+      if (committedIndex !== externalIndex) {
+        committedIndex = externalIndex
+        pendingIndex = externalIndex
+        if (externalIndex >= 0) {
+          lastDeployAt = now
+          armedToolClick = true
+        }
+        report()
+      }
+      return
+    }
+
+    if (desiredIndex === committedIndex) {
+      pendingIndex = desiredIndex
+      return
+    }
+
+    if (desiredIndex !== pendingIndex) {
+      pendingIndex = desiredIndex
+      commitAt = now + HOVER_DELAY_MS
+      return
+    }
+
+    if (now < commitAt) return
+
+    // Opening (or switching to) a tool is rate-limited; closing is free after dwell.
+    if (desiredIndex >= 0 && now - lastDeployAt < DEPLOY_COOLDOWN_MS) {
+      commitAt = lastDeployAt + DEPLOY_COOLDOWN_MS
+      return
+    }
+
+    if (desiredIndex >= 0) {
+      lastDeployAt = now
+      armedToolClick = true
+    }
+    committedIndex = desiredIndex
+    report()
+  }
+
   function applyFrame(t: number) {
+    const now = performance.now()
+    settleCommitted(now)
     const idx = activeIndex()
 
     parallax.lerp(parallaxTarget, 0.06)
-    // Canted (3/4) at all times; swings a little further as it explodes.
-    assembly.rotation.y = 0.0 + 0.0 * explodeScalar + parallax.x * 0.26 + 0.05 * Math.sin(t * 0.3)
-    assembly.rotation.x = 0.3 + 0.12 * explodeScalar - parallax.y * 0.13 + 0.02 * Math.sin(t * 0.35)
-    assembly.rotation.z = 0
-    assembly.updateMatrixWorld(true)
 
-    // Proximity: only explode once the pointer is close to the model on screen.
+    // Proximity probe uses last frame's assembly pose (updated at end of prior tick).
     tmp.set(0, 0, 0).applyMatrix4(assembly.matrixWorld).project(camera)
     const cdx = (pointer.x - tmp.x) * camera.aspect
     const cdy = pointer.y - tmp.y
@@ -544,6 +604,26 @@ export function createMultitool(
     const wantExplode = (stageHover && near) || externalIndex !== null
     explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
     const a = ease(explodeScalar)
+
+    // Canted at rest; tilts further open as it explodes so coloured liners
+    // present a wider pick surface toward the camera.
+    assembly.rotation.y = 0.38 + 0.62 * a + parallax.x * 0.2 + 0.04 * Math.sin(t * 0.3)
+    assembly.rotation.x = 0.3 + 0.28 * a - parallax.y * 0.12 + 0.02 * Math.sin(t * 0.35)
+    assembly.rotation.z = 0
+    assembly.updateMatrixWorld(true)
+
+    // Stacked mechanical ticks as the accordion opens (and reset when closed).
+    if (!wantExplode && a < 0.04) {
+      lastAccordionStep = -1
+    } else if (wantExplode) {
+      const step = Math.min(ACCORDION_CLICK_STEPS - 1, Math.floor(a * ACCORDION_CLICK_STEPS))
+      if (step > lastAccordionStep) {
+        for (let s = lastAccordionStep + 1; s <= step; s++) {
+          playAccordionClick(s, (s - lastAccordionStep - 1) * 0.028)
+        }
+        lastAccordionStep = step
+      }
+    }
 
     // Focus: which layer is nearest the pointer (drives the accordion).
     let fw = 0
@@ -579,14 +659,25 @@ export function createMultitool(
     for (let i = 0; i < tools.length; i++) {
       const tool = tools[i]
       const target = idx === i ? 1 : 0
-      tool.hover += (target - tool.hover) * 0.14
+      const prev = tool.hover
+      // Slightly slower deploy eases the motion once dwell commits.
+      tool.hover += (target - tool.hover) * 0.1
       const h = ease(tool.hover)
       const deploy = h * a // deploy the tool once the casing has opened up
+
+      // Click when a committed tool actually starts swinging open.
+      if (armedToolClick && i === idx && prev < 0.15 && tool.hover >= 0.15 && a > 0.35) {
+        playToolClick()
+        armedToolClick = false
+      }
 
       tool.pivot.rotation.z = lerp(CLOSED, openAngle(i), deploy)
       tool.toolMat.envMapIntensity = 1.7 + h * 0.6
       tool.linerMat.emissiveIntensity = 0.06 + h * 0.5
     }
+
+    // If the open never got far enough to click (e.g. aborted), clear the arm.
+    if (armedToolClick && idx < 0) armedToolClick = false
   }
 
   function resize() {
@@ -610,7 +701,9 @@ export function createMultitool(
   return {
     resize,
     setActiveArea(index: number | null) {
+      unlockAudio()
       externalIndex = index
+      if (index === null) requestIndex(-1)
       report()
     },
     dispose() {
@@ -618,6 +711,7 @@ export function createMultitool(
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerenter', onEnter)
       canvas.removeEventListener('pointerleave', onLeave)
+      canvas.removeEventListener('pointerdown', onPointerDown)
       pmrem.dispose()
       disposables.forEach((d) => d.dispose())
       renderer.dispose()
