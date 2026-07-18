@@ -1,5 +1,10 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
+import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
+import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
+import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import helvetiker from '../assets/helvetiker_bold.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 
 // -----------------------------------------------------------------------------
@@ -229,78 +234,93 @@ export function createMultitool(
     return { group, mesh }
   }
 
-  const front = makeScale(0.52)
   const back = makeScale(-0.52)
-  // Scales are pickable so hovering the casing explodes the tool without
-  // deploying anything (they carry no areaIndex).
-  pickTargets.push(front.mesh, back.mesh)
+  pickTargets.push(back.mesh)
 
-  // ---- engraved face plate (metadata rendered onto the front cover) ----
-  const plateCanvas = document.createElement('canvas')
-  plateCanvas.width = 1400
-  plateCanvas.height = 360
-  const plateCtx = plateCanvas.getContext('2d')!
-  const plateTex = new THREE.CanvasTexture(plateCanvas)
-  plateTex.colorSpace = THREE.SRGBColorSpace
-  plateTex.anisotropy = 4
-  const plateGeo = new THREE.PlaneGeometry(4.4, 1.06)
-  // Sit clearly in front of the scale's beveled front surface so the engraving
-  // isn't occluded by the bevel lip.
-  plateGeo.translate(0, 0, SCALE_D / 2 + 0.12)
-  disposables.push(plateGeo)
-  const plateMat = new THREE.MeshBasicMaterial({
-    map: plateTex,
-    transparent: true,
-    depthWrite: false,
+  // ---- front cover with the identity CUT INTO it (CSG subtraction) ----
+  // The lettering is a real recess in the plate; the cavity walls use a dark
+  // "ink" material. Static, and kept clear of the bored rod holes at ±PIVOT_X.
+  const inkMat = new THREE.MeshStandardMaterial({
+    color: 0x0c0f13,
+    metalness: 0.3,
+    roughness: 0.85,
+    envMapIntensity: 0.5,
   })
-  disposables.push(plateMat, plateTex)
-  front.group.add(new THREE.Mesh(plateGeo, plateMat))
+  disposables.push(inkMat)
+  const RECESS = 0.09
 
-  function wrapLine(text: string, font: string, color: string, x: number, y: number, maxW: number) {
-    plateCtx.font = font
-    plateCtx.fillStyle = color
-    const words = text.split(' ')
-    let line = ''
-    let yy = y
-    for (const w of words) {
-      const test = line ? line + ' ' + w : w
-      if (plateCtx.measureText(test).width > maxW && line) {
-        plateCtx.fillText(line, x, yy)
-        line = w
-        yy += 46
-      } else {
-        line = test
-      }
-    }
-    plateCtx.fillText(line, x, yy)
-  }
+  const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
+  const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
+  const sanitize = (text: string) =>
+    Array.from(text)
+      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
+      .join('')
 
-  function drawPlate(idx: number) {
-    const ctx = plateCtx
-    ctx.clearRect(0, 0, plateCanvas.width, plateCanvas.height)
-    ctx.textBaseline = 'top'
-    const pad = 60
-    if (idx < 0) {
-      ctx.fillStyle = '#eaf0f6'
-      ctx.font = 'bold 128px Inter, system-ui, sans-serif'
-      ctx.fillText(profile.name, pad, 66)
-      ctx.fillStyle = '#9fb0c4'
-      ctx.font = '46px ui-monospace, monospace'
-      ctx.fillText(profile.title, pad, 214)
-      ctx.fillText(contact.email, pad, 276)
-    } else {
-      const area = areas[idx]
-      ctx.fillStyle = area.accent
-      ctx.font = 'bold 48px ui-monospace, monospace'
-      ctx.fillText(`TOOL ${area.code} · ${area.toolName.toUpperCase()}`, pad, 52)
-      ctx.fillStyle = '#f2f6fb'
-      ctx.font = 'bold 118px Inter, system-ui, sans-serif'
-      ctx.fillText(area.label, pad, 108)
-      wrapLine(area.tagline, '44px ui-monospace, monospace', '#b9c4d2', pad, 250, plateCanvas.width - pad * 2)
-    }
-    plateTex.needsUpdate = true
+  const frontShape = panelShape(HANDLE_L, HANDLE_H)
+  addPinHoles(frontShape)
+  const frontGeo = new THREE.ExtrudeGeometry(frontShape, {
+    depth: SCALE_D,
+    bevelEnabled: true,
+    bevelThickness: 0.06,
+    bevelSize: 0.06,
+    bevelSegments: 5,
+    curveSegments: 22,
+    steps: 1,
+  })
+  frontGeo.translate(0, 0, -SCALE_D / 2)
+  frontGeo.computeBoundingBox()
+  // Actual front surface of the cover (accounts for the bevel), so the cut is
+  // guaranteed to open at the surface and recess RECESS deep.
+  const surfaceZ = frontGeo.boundingBox!.max.z
+  const textDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
+
+  const lines: Array<{ text: string; size: number; y: number }> = [
+    { text: sanitize(profile.name), size: 0.3, y: 0.12 },
+    { text: sanitize('Implementation / PM / Product / Development / QA'), size: 0.082, y: -0.14 },
+    { text: sanitize(contact.email), size: 0.082, y: -0.32 },
+  ]
+  const textGeos = lines.map((line) => {
+    const geo = new TextGeometry(line.text, {
+      font,
+      size: line.size,
+      depth: textDepth,
+      curveSegments: 4,
+      bevelEnabled: false,
+    })
+    geo.computeBoundingBox()
+    const bb = geo.boundingBox!
+    const cx = (bb.max.x - bb.min.x) / 2 + bb.min.x
+    geo.translate(-cx, line.y, surfaceZ - RECESS)
+    return geo
+  })
+  const textGeo = mergeGeometries(textGeos, false)!
+  textGeos.forEach((g) => g.dispose())
+
+  // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
+  // (un-engraved) cover so the scene still renders.
+  let frontMesh: THREE.Mesh
+  try {
+    const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
+    const textBrush = new Brush(mergeVertices(textGeo), inkMat)
+    const evaluator = new Evaluator()
+    evaluator.useGroups = true
+    const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
+    result.material = [scaleMat, inkMat]
+    frontMesh = result
+  } catch (err) {
+    console.warn('[multitool] engraving CSG failed, using plain cover', err)
+    frontMesh = new THREE.Mesh(frontGeo.clone(), scaleMat)
   }
-  drawPlate(-1)
+  frontGeo.dispose()
+  textGeo.dispose()
+  disposables.push(frontMesh.geometry)
+
+  const frontGroup = new THREE.Group()
+  frontGroup.position.z = 0.52
+  frontGroup.add(frontMesh)
+  assembly.add(frontGroup)
+  explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
+  pickTargets.push(frontMesh)
 
   // ---- pivot + end pins (rods) ----
   const pins: THREE.Mesh[] = []
@@ -400,8 +420,10 @@ export function createMultitool(
     })
   })
 
-  // Layers ordered front→back along the pin axis, for the accordion explosion.
-  const ordered = [...explodeLayers].sort((a, b) => b.baseZ - a.baseZ)
+  // Layers ordered back→front along the pin axis. Ascending baseZ keeps the
+  // engraved front cover frontmost when exploded (previously it inverted, so the
+  // engraving ended up on the back plate).
+  const ordered = [...explodeLayers].sort((a, b) => a.baseZ - b.baseZ)
   const M = ordered.length
   const center = (M - 1) / 2
 
@@ -423,7 +445,6 @@ export function createMultitool(
     const id = idx >= 0 ? areas[idx].id : null
     if (id !== reported) {
       reported = id
-      drawPlate(idx)
       options.onAreaChange?.(id)
     }
   }
