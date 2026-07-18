@@ -6,7 +6,7 @@
 // `accent` colours the segment's synthetic material and its UI highlights.
 // -----------------------------------------------------------------------------
 
-export type ToolKind = 'driver' | 'wrench' | 'saw' | 'blade'
+export type ToolKind = 'driver' | 'wrench' | 'ruler' | 'scalpel'
 
 export interface Highlight {
   title: string
@@ -136,8 +136,8 @@ export const areas: Area[] = [
     id: 'management',
     code: '03',
     label: 'Management',
-    toolName: 'Saw',
-    tool: 'saw',
+    toolName: 'Ruler',
+    tool: 'ruler',
     tagline: 'Co-ordinating delivery at scale',
     blurb:
       'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour and a bias toward measurable outcomes.',
@@ -166,8 +166,8 @@ export const areas: Area[] = [
     id: 'healthcare',
     code: '04',
     label: 'Healthcare Sciences',
-    toolName: 'Blade',
-    tool: 'blade',
+    toolName: 'Scalpel',
+    tool: 'scalpel',
     tagline: 'The scientific foundation',
     blurb:
       'A molecular and cellular pathology background underpins everything — from assay validation to the healthcare integration standards that move results between systems.',

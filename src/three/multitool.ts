@@ -50,11 +50,11 @@ function toolRig(kind: ToolKind): ToolRig {
     case 'wrench':
       // Left pin → unfolds the other way so the fan reads from both ends.
       return { pivotX: -PIVOT_X, closed: 0, open: Math.PI * 0.78 }
-    case 'saw':
-      // Right pin → long outboard swing, distinct from the blade.
+    case 'ruler':
+      // Right pin → long outboard swing, distinct from the scalpel.
       return { pivotX: PIVOT_X, closed: Math.PI, open: 0.62 }
-    case 'blade':
-      // Right pin → full extension, slightly past flat for a knife-blade fan.
+    case 'scalpel':
+      // Right pin → full extension, slightly past flat for a fine-blade fan.
       return { pivotX: PIVOT_X, closed: Math.PI, open: -0.28 }
   }
 }
@@ -142,37 +142,48 @@ function toolShape(kind: ToolKind): THREE.Shape {
       s.lineTo(0, -TOOL_TANG)
       break
     }
-    case 'saw': {
-      // Wood saw: straight spine, pointed tip, toothed belly.
+    case 'ruler': {
+      // Straight scale with major/minor tick notches on the measuring edge.
       s.moveTo(0, TOOL_TANG)
-      s.lineTo(0.55, 0.2)
-      s.lineTo(2.45, 0.2)
-      s.lineTo(2.72, 0.04)
-      s.lineTo(2.55, -0.06)
+      s.lineTo(0.4, 0.11)
+      s.lineTo(2.55, 0.11)
+      s.lineTo(2.72, 0)
+      s.lineTo(2.55, -0.11)
       {
-        const x0 = 2.48
-        const x1 = 0.5
-        const teeth = 11
-        for (let i = 0; i <= teeth; i++) {
-          const t = i / teeth
-          const x = x0 + (x1 - x0) * t
-          const y = i % 2 === 0 ? -0.06 : -0.3
-          s.lineTo(x, y)
+        const xStart = 2.48
+        const xEnd = 0.48
+        const ticks = 10
+        const step = (xStart - xEnd) / ticks
+        for (let i = 0; i < ticks; i++) {
+          const x = xStart - i * step
+          const depth = i % 3 === 0 ? -0.22 : -0.155
+          const w = 0.035
+          s.lineTo(x, -0.11)
+          s.lineTo(x, depth)
+          s.lineTo(x - w, depth)
+          s.lineTo(x - w, -0.11)
         }
       }
-      s.lineTo(0.35, -0.16)
+      s.lineTo(0.4, -0.11)
       s.lineTo(0, -TOOL_TANG)
       break
     }
-    case 'blade': {
-      // Full spear-point knife blade with a belly on the edge.
-      s.moveTo(0, TOOL_TANG)
-      s.lineTo(0.85, 0.24)
-      s.lineTo(1.9, 0.22)
-      s.quadraticCurveTo(2.45, 0.18, 2.8, 0.02)
-      s.quadraticCurveTo(2.35, -0.2, 1.7, -0.22)
-      s.lineTo(0.8, -0.24)
-      s.lineTo(0, -TOOL_TANG)
+    case 'scalpel': {
+      // Refined surgical blade: slim grip, tapered neck, fine point.
+      s.moveTo(0, TOOL_TANG * 0.85)
+      s.lineTo(0.55, 0.12)
+      s.lineTo(1.05, 0.11)
+      // Slight waist before the blade
+      s.lineTo(1.35, 0.07)
+      s.lineTo(1.7, 0.13)
+      s.lineTo(2.25, 0.1)
+      s.quadraticCurveTo(2.55, 0.06, 2.78, 0.01)
+      // Fine cutting edge back along a shallow belly
+      s.quadraticCurveTo(2.4, -0.04, 1.85, -0.05)
+      s.lineTo(1.4, -0.04)
+      s.lineTo(1.05, -0.1)
+      s.lineTo(0.55, -0.12)
+      s.lineTo(0, -TOOL_TANG * 0.85)
       break
     }
   }
@@ -184,11 +195,11 @@ function toolShape(kind: ToolKind): THREE.Shape {
   hole.absarc(0, 0, TOOL_HOLE, 0, Math.PI * 2, true)
   s.holes.push(hole)
 
-  if (kind === 'blade') {
-    // Nail nick
-    const nick = new THREE.Path()
-    nick.absellipse(1.15, 0.02, 0.16, 0.07, 0, Math.PI * 2, true, 0)
-    s.holes.push(nick)
+  if (kind === 'scalpel') {
+    // Small grip fenestration on the handle
+    const grip = new THREE.Path()
+    grip.absellipse(0.78, 0, 0.14, 0.045, 0, Math.PI * 2, true, 0)
+    s.holes.push(grip)
   }
 
   return s
