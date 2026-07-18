@@ -552,8 +552,8 @@ export function createMultitool(
   let lastAccordionStep = -1
   let armedToolClick = false
 
-  const HOVER_DELAY_MS = 140
-  const DEPLOY_COOLDOWN_MS = 320
+  const HOVER_DELAY_MS = 105 // was 140; ~25% snappier dwell before commit
+  const DEPLOY_COOLDOWN_MS = 240 // was 320; matching 25% reduction
   const ACCORDION_CLICK_STEPS = Math.max(4, M - 1)
 
   const activeIndex = () => (externalIndex !== null ? externalIndex : committedIndex)

@@ -42,7 +42,7 @@ function onLegendActivate(areaId: string, index: number) {
           <p class="blurb">{{ activeArea.blurb }}</p>
         </div>
         <div v-else key="idle">
-          <p class="panel-title">{{ profile.name }}</p>
+          <p class="panel-title">ABOUT ME</p>
           <p class="blurb">{{ profile.statement }}</p>
         </div>
       </Transition>
