@@ -18,7 +18,8 @@ import { areas, contact, profile, type ToolKind } from '../data/cv'
 
 const HANDLE_L = 5.0
 const HANDLE_H = 1.5
-const PIVOT_X = HANDLE_L / 2 - 0.9 // end pin the tools rotate on
+// Pins sit nearer the ends so the face lettering has clear clearance.
+const PIVOT_X = HANDLE_L / 2 - 0.55 // end pin the tools rotate on
 const PIN_R = 0.12
 const N = areas.length
 // Accordion explosion + proximity gating.
@@ -240,9 +241,10 @@ export function createMultitool(
   const back = makeScale(-0.52)
   pickTargets.push(back.mesh)
 
-  // ---- front cover with the identity CUT INTO it (CSG subtraction) ----
-  // The lettering is a real recess in the plate; cut faces use an enamel-white
-  // inlay so the glyphs read as filled lettering against the grey scale.
+  // ---- front cover with identity CUT INTO it, then filled with enamel ----
+  // CSG only excavates the pocket (metal cavity walls). A separate, slightly
+  // shallower glyph mesh sits in that pocket as the white enamel inlay — so
+  // increasing RECESS deepens a real filled recess rather than hollow white walls.
   // Static, and kept clear of the bored rod holes at ±PIVOT_X.
   const inlayMat = new THREE.MeshPhysicalMaterial({
     color: 0xf3f1ec,
@@ -253,7 +255,9 @@ export function createMultitool(
     envMapIntensity: 0.85,
   })
   disposables.push(inlayMat)
-  const RECESS = 0.01
+  const RECESS = 0.05
+  // Leave a hair of metal lip so the inlay reads as seated in the pocket.
+  const INLAY_CLEARANCE = 0.006
 
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
   const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
@@ -278,55 +282,87 @@ export function createMultitool(
   // Actual front surface of the cover (accounts for the bevel), so the cut is
   // guaranteed to open at the surface and recess RECESS deep.
   const surfaceZ = frontGeo.boundingBox!.max.z
-  const textDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
+  const cutterDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
+  const fillDepth = Math.max(RECESS - INLAY_CLEARANCE, 0.004)
 
   const lines: Array<{ text: string; size: number; y: number }> = [
-    { text: sanitize(profile.name), size: 0.3, y: 0.12 },
-    { text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'), size: 0.082, y: -0.14 },
-    { text: sanitize(contact.email), size: 0.082, y: -0.32 },
-  ]
-  const textGeos = lines.map((line) => {
-    const geo = new TextGeometry(line.text, {
-      font,
-      size: line.size,
-      depth: textDepth,
-      curveSegments: 4,
-      bevelEnabled: false,
+    { text: sanitize(profile.name), size: 0.28, y: 0.1 },
+    { text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'), size: 0.078, y: -0.16 },
+    { text: sanitize(contact.email), size: 0.078, y: -0.34 },
+  ].filter((line) => line.text.length > 0)
+
+  // Layout helpers: centre each line on X, then centre the whole block on Y so the
+  // lettering sits optically in the middle of the plate between the rods.
+  function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
+    return lines.map((line) => {
+      const geo = new TextGeometry(line.text, {
+        font,
+        size: line.size,
+        depth,
+        curveSegments: 4,
+        bevelEnabled: false,
+      })
+      geo.computeBoundingBox()
+      const bb = geo.boundingBox!
+      const cx = (bb.max.x + bb.min.x) / 2
+      geo.translate(-cx, line.y, z)
+      return geo
     })
-    geo.computeBoundingBox()
-    const bb = geo.boundingBox!
-    const cx = (bb.max.x - bb.min.x) / 2 + bb.min.x
-    geo.translate(-cx, line.y, surfaceZ - RECESS)
-    return geo
-  })
-  const textGeo = mergeGeometries(textGeos, false)!
-  textGeos.forEach((g) => g.dispose())
+  }
+
+  function centreBlockY(geos: THREE.BufferGeometry[]) {
+    let minY = Infinity
+    let maxY = -Infinity
+    for (const geo of geos) {
+      geo.computeBoundingBox()
+      const bb = geo.boundingBox!
+      minY = Math.min(minY, bb.min.y)
+      maxY = Math.max(maxY, bb.max.y)
+    }
+    const cy = (minY + maxY) / 2
+    for (const geo of geos) geo.translate(0, -cy, 0)
+  }
+
+  const cutterGeos = layoutTextGeos(cutterDepth, surfaceZ - RECESS)
+  centreBlockY(cutterGeos)
+  const cutterGeo = mergeGeometries(cutterGeos, false)!
+  cutterGeos.forEach((g) => g.dispose())
+
+  const fillGeos = layoutTextGeos(fillDepth, surfaceZ - RECESS)
+  centreBlockY(fillGeos)
+  const fillGeo = mergeGeometries(fillGeos, false)!
+  fillGeos.forEach((g) => g.dispose())
 
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
-  // (un-engraved) cover so the scene still renders.
+  // cover with the enamel glyphs still present so the scene still renders.
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    const textBrush = new Brush(mergeVertices(textGeo), inlayMat)
+    const textBrush = new Brush(mergeVertices(cutterGeo), scaleMat)
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    result.material = [scaleMat, inlayMat]
+    // Both groups stay metal — the pocket walls are the scale, not the enamel.
+    result.material = [scaleMat, scaleMat]
     frontMesh = result
   } catch (err) {
     console.warn('[multitool] engraving CSG failed, using plain cover', err)
     frontMesh = new THREE.Mesh(frontGeo.clone(), scaleMat)
   }
   frontGeo.dispose()
-  textGeo.dispose()
+  cutterGeo.dispose()
   disposables.push(frontMesh.geometry)
+
+  const inlayMesh = new THREE.Mesh(fillGeo, inlayMat)
+  disposables.push(fillGeo)
 
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52
   frontGroup.add(frontMesh)
+  frontGroup.add(inlayMesh)
   assembly.add(frontGroup)
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
-  pickTargets.push(frontMesh)
+  pickTargets.push(frontMesh, inlayMesh)
 
   // ---- pivot + end pins (rods) ----
   const pins: THREE.Mesh[] = []

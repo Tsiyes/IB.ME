@@ -14,6 +14,14 @@ function onAreaChange(id: string | null) {
 function hoverLegend(index: number | null) {
   forceArea.value = index
 }
+function scrollToSpecialisms(areaId?: string) {
+  const el = document.getElementById(areaId ? `area-${areaId}` : 'specialisms')
+  el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+function onLegendActivate(areaId: string, index: number) {
+  forceArea.value = index
+  scrollToSpecialisms(areaId)
+}
 </script>
 
 <template>
@@ -50,20 +58,27 @@ function hoverLegend(index: number | null) {
         @mouseleave="hoverLegend(null)"
         @focus="hoverLegend(i)"
         @blur="hoverLegend(null)"
+        @click="onLegendActivate(area.id, i)"
       >
         <span class="dot" />
         <span class="mono">{{ area.label }}</span>
       </button>
     </nav>
+
+    <button type="button" class="scroll-cue" @click="scrollToSpecialisms()">
+      <span class="mono">Specialisms</span>
+      <span class="chev" aria-hidden="true" />
+    </button>
   </section>
 
   <main class="doc">
-    <section class="block">
+    <section id="specialisms" class="block">
       <h3 class="mono section-title">Specialisms</h3>
       <div class="grid areas-grid">
         <article
           v-for="area in areas"
           :key="area.id"
+          :id="`area-${area.id}`"
           class="areacard"
           :style="{ '--accent': area.accent }"
         >
@@ -144,8 +159,9 @@ function hoverLegend(index: number | null) {
 /* ---------- HERO ---------- */
 .hero {
   position: relative;
-  height: 100svh;
-  min-height: 560px;
+  /* Short of a full viewport so the Specialisms heading peeks below. */
+  height: 88svh;
+  min-height: 520px;
   overflow: hidden;
 }
 
@@ -165,7 +181,7 @@ function hoverLegend(index: number | null) {
   --accent: #3b82f6;
   position: absolute;
   left: 50%;
-  bottom: clamp(78px, 12vh, 118px);
+  bottom: clamp(118px, 18vh, 168px);
   transform: translateX(-50%);
   z-index: 2;
   width: min(52ch, 86vw);
@@ -208,13 +224,57 @@ function hoverLegend(index: number | null) {
 .legend {
   position: absolute;
   left: 50%;
-  bottom: clamp(18px, 3vw, 34px);
+  bottom: clamp(48px, 7vh, 72px);
   transform: translateX(-50%);
   z-index: 2;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
+}
+
+.scroll-cue {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(10px, 2vh, 18px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+}
+.scroll-cue:hover,
+.scroll-cue:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+.scroll-cue .chev {
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  animation: cue-bob 1.8s ease-in-out infinite;
+}
+@keyframes cue-bob {
+  0%,
+  100% {
+    transform: rotate(45deg) translateY(0);
+  }
+  50% {
+    transform: rotate(45deg) translateY(3px);
+  }
 }
 .leg {
   --accent: #3b82f6;
@@ -285,6 +345,10 @@ function hoverLegend(index: number | null) {
 }
 .block {
   margin-bottom: clamp(40px, 7vw, 84px);
+}
+#specialisms,
+.areacard {
+  scroll-margin-top: 28px;
 }
 .section-title {
   font-size: 0.74rem;
