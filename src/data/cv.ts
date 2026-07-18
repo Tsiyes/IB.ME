@@ -1,181 +1,225 @@
 // -----------------------------------------------------------------------------
-// CV content + tool configuration.
+// CV content for Isaac Bristow, organised around four specialist areas. Each
+// area maps to one deployable tool on the 3D multi-tool (see src/three/multitool.ts).
 //
-// This is the single place to edit the CV. Each entry in `tools` becomes a
-// fold-out implement on the Swiss army knife. `openAngle` controls how far the
-// tool swings out from the handle (degrees, clockwise, 180 = straight left),
-// and `shape` selects one of the silhouettes drawn in SwissArmyKnife.vue.
+// `tool` selects the extruded silhouette; `openAngle` (radians) is how far the
+// tool swings from its stowed position when fully deployed; `spin` (radians) is
+// the extra roll about the tool's own long axis applied during deployment.
 // -----------------------------------------------------------------------------
 
-export type ToolShape =
-  | 'blade'
-  | 'screwdriver'
-  | 'corkscrew'
-  | 'canopener'
-  | 'scissors'
-  | 'magnifier'
+export type ToolKind = 'screwdriver' | 'blade' | 'wrench' | 'scalpel'
 
-export interface CvItem {
+export interface Highlight {
   title: string
-  subtitle?: string
-  period?: string
+  meta?: string
   detail?: string
-  bullets?: string[]
 }
 
-export interface Tool {
+export interface Area {
   id: string
-  /** Short label shown on the tool tab and in the panel header. */
+  /** Zero-padded index shown in the CAD HUD, e.g. "02". */
+  code: string
   label: string
-  /** One-line tagline shown under the panel header. */
+  /** Human name of the implement, e.g. "Flat driver". */
+  toolName: string
+  tool: ToolKind
   tagline: string
-  shape: ToolShape
-  /** Angle (deg, clockwise) the tool rotates to when opened. */
-  openAngle: number
-  /** Accent colour for the tool's steel + panel highlights. */
-  accent: string
-  items: CvItem[]
-}
-
-export interface Profile {
-  name: string
-  title: string
-  location: string
   blurb: string
+  skills: string[]
+  highlights: Highlight[]
+  /** Deployment geometry, consumed by the 3D scene. */
+  openAngle: number
+  spin: number
+  zOffset: number
 }
 
-export const profile: Profile = {
-  name: 'Isaac',
-  title: 'Product Engineer · Full-stack & Creative Dev',
-  location: 'Remote · UTC',
-  blurb:
-    'A CV you can actually open up. Click a tool to fold it out of the handle and read that part of the story.',
+export interface Role {
+  title: string
+  period: string
+  detail?: string
 }
 
-export const tools: Tool[] = [
+export interface Credential {
+  place: string
+  award: string
+}
+
+export const profile = {
+  name: 'Isaac Bristow',
+  creds: 'BSc (Hons)',
+  title: 'Implementation · PM · Product · Development · QA',
+  statement:
+    'Resilient, self-directed, pressure-motivated. Preference for high-intensity, high-reward environments. Individually, I find satisfaction delivering creative solutions via a diverse and expanding toolset; collaboratively, multi-disciplinary co-ordination and radical candour drive success in the projects I lead and contribute to.',
+}
+
+export const contact = {
+  email: 'Isaaclbristow@gmail.com',
+  phone: '+44 7809 120716',
+  linkedin: 'linkedin.com/in/isaac-bristow',
+  linkedinUrl: 'https://www.linkedin.com/in/isaac-bristow/',
+}
+
+export const areas: Area[] = [
   {
-    id: 'profile',
-    label: 'Profile',
-    tagline: 'The main blade — who I am',
-    shape: 'blade',
-    openAngle: 138,
-    accent: '#d7dde6',
-    items: [
+    id: 'development',
+    code: '01',
+    label: 'Development',
+    toolName: 'Flat driver',
+    tool: 'screwdriver',
+    tagline: 'Building & integrating the systems',
+    blurb:
+      'Full-stack and integration engineering across healthcare platforms — from UI to interface engine to cloud infrastructure, increasingly augmented with LLM/agentic workflows.',
+    skills: [
+      'VueJS',
+      'Mirth Connect',
+      'Kubernetes',
+      'Azure',
+      'SQL Server',
+      'Cosmos DB',
+      'LLM / Agentic workflows',
+      'Cypress / Mochawesome',
+      'Network Configuration',
+      'Cloud / On-Prem WinServ',
+      'HW / SW Installation',
+    ],
+    highlights: [
       {
-        title: 'Product-minded engineer',
+        title: 'Next-generation LIMS',
+        meta: 'Founding contributor',
         detail:
-          'I build polished, fast web products end to end — from data model to the last pixel of animation. Happiest at the seam between engineering and design, turning fuzzy ideas into things people enjoy using.',
+          'Founding member and key contributor to a next-generation Laboratory Information Management System.',
       },
       {
-        title: 'How I work',
-        bullets: [
-          'Ship small, measure, iterate.',
-          'Treat performance and accessibility as features.',
-          'Prototype in code, not slides.',
-        ],
+        title: 'Automated QA',
+        detail: 'End-to-end and integration test suites with Cypress + Mochawesome reporting.',
       },
     ],
+    openAngle: 1.15,
+    spin: 0.9,
+    zOffset: 0.24,
   },
   {
-    id: 'skills',
-    label: 'Skills',
-    tagline: 'The screwdriver — the toolkit',
-    shape: 'screwdriver',
-    openAngle: 159,
-    accent: '#cfd6e0',
-    items: [
+    id: 'product',
+    code: '02',
+    label: 'Product',
+    toolName: 'Blade',
+    tool: 'blade',
+    tagline: 'Shaping compliant, usable products',
+    blurb:
+      'Owning product direction for regulated medical software — balancing clinical needs, usability and the certification bar that healthcare devices must clear.',
+    skills: [
+      'Product Research',
+      'CE Marking',
+      'Medical Device Certification',
+      'DCB0129',
+      'ISO 13485',
+      'Digital Pathology',
+      'LIMS / EPRs',
+      'Order Comms',
+      'Product Design',
+    ],
+    highlights: [
       {
-        title: 'Frontend',
-        detail: 'Vue 3, TypeScript, Vite, SVG/CSS animation, Web Components.',
+        title: 'Clinical partnerships',
+        detail: 'Stabilised relationships with key clinical partners through deliberate product design.',
       },
       {
-        title: 'Backend',
-        detail: 'Node.js, Python, PostgreSQL, REST & serverless edge functions.',
-      },
-      {
-        title: 'Craft',
-        detail: 'Design systems, motion design, performance budgets, testing.',
+        title: 'Regulatory readiness',
+        detail: 'Product decisions framed against DCB0129 and ISO 13485 from the outset.',
       },
     ],
+    openAngle: 0.42,
+    spin: -0.7,
+    zOffset: 0.08,
   },
   {
-    id: 'experience',
-    label: 'Experience',
-    tagline: 'The corkscrew — twists and turns',
-    shape: 'corkscrew',
-    openAngle: 180,
-    accent: '#c8cfd9',
-    items: [
+    id: 'management',
+    code: '03',
+    label: 'Management',
+    toolName: 'Spanner',
+    tool: 'wrench',
+    tagline: 'Co-ordinating delivery at scale',
+    blurb:
+      'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour and a bias toward measurable outcomes.',
+    skills: [
+      'Project Management',
+      'Operational Management',
+      'Stakeholder Management',
+      'Multi-disciplinary Co-ordination',
+      'Delivery & Implementation',
+      'BI / Finance / Tableau',
+      'Notion',
+    ],
+    highlights: [
       {
-        title: 'Senior Product Engineer',
-        subtitle: 'Northwind Labs',
-        period: '2023 — present',
-        bullets: [
-          'Led the rebuild of the onboarding flow, lifting activation 24%.',
-          'Owned the component library used by 30+ engineers.',
-        ],
+        title: 'LIMS transformation, London',
+        detail: 'Delivery & implementation of LIMS transformation projects across London sites.',
       },
       {
-        title: 'Full-stack Engineer',
-        subtitle: 'Beacon Interactive',
-        period: '2020 — 2023',
-        bullets: [
-          'Shipped a real-time collaboration editor from prototype to GA.',
-          'Cut p95 page load from 4.1s to 1.2s.',
-        ],
+        title: 'Radical candour',
+        detail: 'Direct, high-trust communication that keeps multi-disciplinary teams aligned.',
       },
     ],
+    openAngle: -0.42,
+    spin: 0.7,
+    zOffset: -0.08,
   },
   {
-    id: 'education',
-    label: 'Education',
-    tagline: 'The can opener — foundations',
-    shape: 'canopener',
-    openAngle: 201,
-    accent: '#c2c9d4',
-    items: [
+    id: 'healthcare',
+    code: '04',
+    label: 'Healthcare Sciences',
+    toolName: 'Scalpel',
+    tool: 'scalpel',
+    tagline: 'The scientific foundation',
+    blurb:
+      'A molecular and cellular pathology background underpins everything — from assay validation to the healthcare integration standards that move results between systems.',
+    skills: [
+      'Molecular Biology',
+      'Cellular Pathology',
+      'Assay Validation / Verification',
+      'HL7 / Healthcare Interfacing',
+      'Roche',
+      'Leica',
+      '3DHISTECH',
+    ],
+    highlights: [
       {
-        title: 'BSc Computer Science',
-        subtitle: 'University of Somewhere',
-        period: '2016 — 2020',
-        detail: 'First-class honours. Focus on graphics and human–computer interaction.',
+        title: 'SARS-CoV-2 Omicron panel',
+        detail: 'Delivered the first nationally verified SARS-CoV-2 Omicron variant detection panel.',
+      },
+      {
+        title: 'DirectPCR 10× scale-up',
+        detail: 'Designed and verified a 10× scale-up for DirectPCR COVID testing.',
+      },
+      {
+        title: 'GIRFT nomination',
+        detail: 'GIRFT reward nomination for a novel thermocycler contamination monitor.',
       },
     ],
+    openAngle: -1.15,
+    spin: -0.9,
+    zOffset: -0.24,
   },
-  {
-    id: 'projects',
-    label: 'Projects',
-    tagline: 'The scissors — things I cut loose',
-    shape: 'scissors',
-    openAngle: 222,
-    accent: '#bcc4cf',
-    items: [
-      {
-        title: 'This CV',
-        detail: 'An interactive Swiss army knife résumé built with Vue + SVG. Meta, but fun.',
-      },
-      {
-        title: 'Tiny-Sync',
-        detail: 'A 3KB offline-first sync engine for local-first apps.',
-      },
-    ],
-  },
-  {
-    id: 'contact',
-    label: 'Contact',
-    tagline: 'The magnifier — find me',
-    shape: 'magnifier',
-    openAngle: 243,
-    accent: '#b6bfca',
-    items: [
-      {
-        title: 'Email',
-        detail: 'isaac@example.com',
-      },
-      {
-        title: 'Elsewhere',
-        bullets: ['github.com/isaac', 'linkedin.com/in/isaac'],
-      },
-    ],
-  },
+]
+
+export const employment: Role[] = [
+  { title: 'QA & Implementation Engineer', period: 'May 2022 — Present' },
+  { title: 'Senior Laboratory Supervisor', period: 'Dec 2020 — Apr 2022' },
+  { title: 'Medical Laboratory Assistant', period: 'Jul 2020 — Dec 2020' },
+  { title: 'Various BoH & Retail', period: 'Oct 2012 — Jul 2020' },
+]
+
+export const education: Credential[] = [
+  { place: 'University of Portsmouth', award: 'BSc Biology — First Class w/ Honours' },
+  { place: 'South Downs College', award: 'A Level — Biology / Chemistry / English Lang' },
+  { place: "St Edmund's Catholic", award: '10 GCSEs A*–C inc. Maths & English' },
+]
+
+export const accolades: string[] = [
+  'Founding member and key contributor of a next-generation LIMS system.',
+  'Stabilised relationships with key clinical partners through product design.',
+  'Delivered the first nationally verified SARS-CoV-2 Omicron variant detection panel.',
+  'Designed and verified a 10× scale-up for DirectPCR COVID testing.',
+  'GIRFT reward nomination for a novel thermocycler contamination monitor.',
+  'Delivery & implementation of LIMS transformation projects across London.',
 ]
