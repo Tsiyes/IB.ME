@@ -1,10 +1,9 @@
 // -----------------------------------------------------------------------------
-// CV content for Isaac Bristow, organised around four specialist areas. Each
-// area maps to one deployable tool on the 3D multi-tool (see src/three/multitool.ts).
+// CV content for Isaac Bristow.
 //
-// `tool` selects the extruded silhouette; `openAngle` (radians) is how far the
-// tool swings from its stowed position when fully deployed; `spin` (radians) is
-// the extra roll about the tool's own long axis applied during deployment.
+// The multi-tool is segmented into four specialist `areas`; each maps to one
+// tool that extrudes when its segment is hovered (see src/three/multitool.ts).
+// `accent` colours the segment's synthetic material and its UI highlights.
 // -----------------------------------------------------------------------------
 
 export type ToolKind = 'screwdriver' | 'blade' | 'wrench' | 'scalpel'
@@ -17,26 +16,30 @@ export interface Highlight {
 
 export interface Area {
   id: string
-  /** Zero-padded index shown in the CAD HUD, e.g. "02". */
   code: string
   label: string
-  /** Human name of the implement, e.g. "Flat driver". */
   toolName: string
   tool: ToolKind
   tagline: string
   blurb: string
   skills: string[]
   highlights: Highlight[]
-  /** Deployment geometry, consumed by the 3D scene. */
-  openAngle: number
-  spin: number
-  zOffset: number
+  accent: string
 }
 
-export interface Role {
+export interface ExperienceRole {
   title: string
   period: string
-  detail?: string
+  location?: string
+  summary?: string
+  bullets?: string[]
+  skills?: string[]
+}
+
+export interface Company {
+  name: string
+  meta?: string
+  roles: ExperienceRole[]
 }
 
 export interface Credential {
@@ -71,6 +74,7 @@ export const areas: Area[] = [
       'Full-stack and integration engineering across healthcare platforms — from UI to interface engine to cloud infrastructure, increasingly augmented with LLM/agentic workflows.',
     skills: [
       'VueJS',
+      'C#',
       'Mirth Connect',
       'Kubernetes',
       'Azure',
@@ -80,7 +84,6 @@ export const areas: Area[] = [
       'Cypress / Mochawesome',
       'Network Configuration',
       'Cloud / On-Prem WinServ',
-      'HW / SW Installation',
     ],
     highlights: [
       {
@@ -94,9 +97,7 @@ export const areas: Area[] = [
         detail: 'End-to-end and integration test suites with Cypress + Mochawesome reporting.',
       },
     ],
-    openAngle: 1.15,
-    spin: 0.9,
-    zOffset: 0.24,
+    accent: '#3b82f6',
   },
   {
     id: 'product',
@@ -121,16 +122,15 @@ export const areas: Area[] = [
     highlights: [
       {
         title: 'Clinical partnerships',
-        detail: 'Stabilised relationships with key clinical partners through deliberate product design.',
+        detail:
+          'Stabilised relationships with key clinical partners through deliberate product design.',
       },
       {
         title: 'Regulatory readiness',
         detail: 'Product decisions framed against DCB0129 and ISO 13485 from the outset.',
       },
     ],
-    openAngle: 0.42,
-    spin: -0.7,
-    zOffset: 0.08,
+    accent: '#10b981',
   },
   {
     id: 'management',
@@ -160,9 +160,7 @@ export const areas: Area[] = [
         detail: 'Direct, high-trust communication that keeps multi-disciplinary teams aligned.',
       },
     ],
-    openAngle: -0.42,
-    spin: 0.7,
-    zOffset: -0.08,
+    accent: '#f59e0b',
   },
   {
     id: 'healthcare',
@@ -184,8 +182,9 @@ export const areas: Area[] = [
     ],
     highlights: [
       {
-        title: 'SARS-CoV-2 Omicron panel',
-        detail: 'Delivered the first nationally verified SARS-CoV-2 Omicron variant detection panel.',
+        title: 'SARS-CoV-2 variant panels',
+        detail:
+          'Delivered the first nationally verified SARS-CoV-2 Omicron variant detection panel.',
       },
       {
         title: 'DirectPCR 10× scale-up',
@@ -196,17 +195,68 @@ export const areas: Area[] = [
         detail: 'GIRFT reward nomination for a novel thermocycler contamination monitor.',
       },
     ],
-    openAngle: -1.15,
-    spin: -0.9,
-    zOffset: -0.24,
+    accent: '#ec4899',
   },
 ]
 
-export const employment: Role[] = [
-  { title: 'QA & Implementation Engineer', period: 'May 2022 — Present' },
-  { title: 'Senior Laboratory Supervisor', period: 'Dec 2020 — Apr 2022' },
-  { title: 'Medical Laboratory Assistant', period: 'Jul 2020 — Dec 2020' },
-  { title: 'Various BoH & Retail', period: 'Oct 2012 — Jul 2020' },
+export const experience: Company[] = [
+  {
+    name: 'Health Services Laboratories',
+    meta: 'Full-time · 6 yrs 1 mo',
+    roles: [
+      {
+        title: 'QA & Implementation Engineer',
+        period: 'May 2022 — Present · 4 yrs 3 mos',
+        summary:
+          "Within this highly dynamic role I've made significant contributions to the design, development, testing and rollout of a web-based laboratory management application across several laboratories and hospitals in the London area — the Royal Free, UCLH, Barnet, North Mid, Northwick Park, Ealing, Chase Farm and Whittington, as well as ~30 smaller sites across Greater London.",
+        bullets: [
+          'Requirement discovery & technical specification creation',
+          'Networking and hardware installation',
+          'Manual and automated (Cypress) QA',
+          'Business intelligence through SQL report generation & Tableau integration',
+          'Infrastructure management through Kubernetes calibration and Azure SQL maintenance',
+          'Creating and delivering training material across all levels of the business',
+          'Presenting the application and demonstrating features to global partners',
+          'Researching and resolving critical issues in C# and Vue.js',
+          'Integration of medical devices and systems',
+          'Stakeholder management',
+        ],
+        skills: ['Cypress', 'SQL', 'Vue.js', 'C#', 'Kubernetes', 'Azure', 'Tableau'],
+      },
+      {
+        title: 'Laboratory Supervisor',
+        period: 'Dec 2020 — Apr 2022 · 1 yr 5 mos',
+        location: 'London Area, United Kingdom',
+        summary:
+          'Focused on delivering training for PCR pathways on QS5, COBAS and PANTHER platforms while maintaining laboratory KPIs, with a focus on tackling invalid results via pathway improvement through statistical analysis.',
+        bullets: [
+          'In partnership with the DHSC, delivered the first verified P681R SARS-CoV-2 mutation panel assay for delta variant detection.',
+          'Amongst the first to deliver a verified panel for detection of N501Y, E484K, K417N & K417T mutations, and the Omicron-indicative mutation Q493R — specificity determined using Illumina NGS.',
+          'Contributed to and delivered a one-week intensive laboratory training course in partnership with UCL — just under 100 staff in under 7 days — to kick-start high-throughput qPCR COVID testing.',
+          'Experienced with in-house developed and CE-marked assay verification and validation, plus SOP drafting and re-iteration in line with QM principles.',
+        ],
+      },
+      {
+        title: 'Medical Laboratory Assistant — Molecular Pathology',
+        period: 'Jul 2020 — Dec 2020 · 6 mos',
+        location: 'London Area, United Kingdom',
+        summary:
+          'Performed routine PCR. Reinforced the foundations of my practical techniques. Established myself as a discerning and reliable individual capable of meeting targets and identifying areas for improvement.',
+      },
+    ],
+  },
+  {
+    name: 'Various — Back of House & Retail',
+    meta: 'Oct 2012 — Jul 2020',
+    roles: [
+      {
+        title: 'Various BoH & Retail roles',
+        period: 'Oct 2012 — Jul 2020',
+        summary:
+          'A range of hospitality and retail positions held alongside education, building the resilience and pace that carried into laboratory and engineering work.',
+      },
+    ],
+  },
 ]
 
 export const education: Credential[] = [

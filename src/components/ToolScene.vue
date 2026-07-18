@@ -2,7 +2,8 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createMultitool, type Multitool } from '../three/multitool'
 
-const props = defineProps<{ progress: number }>()
+const props = defineProps<{ forceArea?: number | null }>()
+const emit = defineEmits<{ (e: 'area-change', id: string | null): void }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
@@ -10,16 +11,17 @@ let observer: ResizeObserver | null = null
 
 onMounted(() => {
   if (!canvas.value) return
-  tool = createMultitool(canvas.value)
-  tool.setProgress(props.progress)
+  tool = createMultitool(canvas.value, {
+    onAreaChange: (id) => emit('area-change', id),
+  })
 
   observer = new ResizeObserver(() => tool?.resize())
   if (canvas.value.parentElement) observer.observe(canvas.value.parentElement)
 })
 
 watch(
-  () => props.progress,
-  (p) => tool?.setProgress(p),
+  () => props.forceArea,
+  (v) => tool?.setActiveArea(v ?? null),
 )
 
 onBeforeUnmount(() => {
@@ -37,9 +39,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .scene {
-  position: fixed;
+  position: absolute;
   inset: 0;
-  z-index: 0;
 }
 .scene-canvas {
   display: block;

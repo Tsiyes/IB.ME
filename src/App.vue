@@ -1,455 +1,451 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import ToolScene from './components/ToolScene.vue'
-import { accolades, areas, contact, education, employment, profile } from './data/cv'
+import { accolades, areas, contact, education, experience, profile } from './data/cv'
 
-const SECTION_COUNT = areas.length + 2 // hero + areas + dossier
+const activeId = ref<string | null>(null)
+const forceArea = ref<number | null>(null)
 
-const scrollY = ref(0)
-const vh = ref(typeof window !== 'undefined' ? window.innerHeight : 800)
+const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
 
-const sectionMeta = [
-  { code: '00', label: 'Overview' },
-  ...areas.map((a) => ({ code: a.code, label: a.label })),
-  { code: '05', label: 'Dossier' },
-]
-
-const progress = computed(() => {
-  const max = (SECTION_COUNT - 1) * vh.value
-  return max > 0 ? Math.min(1, Math.max(0, scrollY.value / max)) : 0
-})
-
-const active = computed(() => {
-  const idx = Math.round(scrollY.value / vh.value)
-  return Math.min(SECTION_COUNT - 1, Math.max(0, idx))
-})
-
-// Per-panel focus (1 when centred in the viewport, fading to 0 either side).
-// The 0.62 window keeps only one card prominent at a time so adjacent panels
-// don't visibly overlap during the cross-fade.
-function focus(index: number): number {
-  const dist = Math.abs(scrollY.value - index * vh.value) / vh.value
-  return Math.min(1, Math.max(0, 1 - dist / 0.62))
+function onAreaChange(id: string | null) {
+  activeId.value = id
 }
-
-function panelStyle(index: number) {
-  const f = focus(index)
-  const eased = f * f * (3 - 2 * f)
-  return {
-    opacity: String(eased),
-    transform: `translateY(${(1 - eased) * 26}px)`,
-    pointerEvents: (eased > 0.6 ? 'auto' : 'none') as 'auto' | 'none',
-  }
+function hoverLegend(index: number | null) {
+  forceArea.value = index
 }
-
-let raf = 0
-function onScroll() {
-  if (raf) return
-  raf = requestAnimationFrame(() => {
-    scrollY.value = window.scrollY || document.documentElement.scrollTop || 0
-    raf = 0
-  })
-}
-function onResize() {
-  vh.value = window.innerHeight
-}
-
-onMounted(() => {
-  window.addEventListener('scroll', onScroll, { passive: true })
-  window.addEventListener('resize', onResize)
-  onResize()
-  onScroll()
-})
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', onScroll)
-  window.removeEventListener('resize', onResize)
-})
 </script>
 
 <template>
-  <ToolScene :progress="progress" />
+  <section class="hero">
+    <ToolScene :force-area="forceArea" @area-change="onAreaChange" />
 
-  <!-- CAD heads-up display -->
-  <div class="hud" aria-hidden="true">
-    <span class="crop tl" />
-    <span class="crop tr" />
-    <span class="crop bl" />
-    <span class="crop br" />
+    <header class="masthead">
+      <p class="mono kicker">CV · IMPLEMENTATION / PM / PRODUCT / DEVELOPMENT / QA</p>
+      <h1>{{ profile.name }}<span class="creds">{{ profile.creds }}</span></h1>
+      <p class="role">{{ profile.title }}</p>
+      <ul class="contact mono">
+        <li>{{ contact.email }}</li>
+        <li>{{ contact.phone }}</li>
+        <li>
+          <a :href="contact.linkedinUrl" target="_blank" rel="noopener">{{ contact.linkedin }}</a>
+        </li>
+      </ul>
+    </header>
 
-    <div class="titleblock">
-      <div class="mono small muted">DRAWING&nbsp;// IB-2026-01 · REV C</div>
-      <div class="mono big">MULTI-TOOL // PERSONNEL SPEC</div>
-      <div class="mono muted">SHEET 1 OF 1 · SCALE 1:1 · UNITS mm</div>
+    <!-- Live inspector card -->
+    <div class="inspector" :style="activeArea ? { '--accent': activeArea.accent } : {}">
+      <Transition name="swap" mode="out-in">
+        <div v-if="activeArea" :key="activeArea.id" class="ins-body">
+          <div class="ins-head">
+            <span class="mono code">TOOL {{ activeArea.code }}</span>
+            <span class="mono muted">{{ activeArea.toolName }}</span>
+          </div>
+          <h2>{{ activeArea.label }}</h2>
+          <p class="tagline mono">{{ activeArea.tagline }}</p>
+          <p class="blurb">{{ activeArea.blurb }}</p>
+          <ul class="chips">
+            <li v-for="s in activeArea.skills" :key="s" class="mono">{{ s }}</li>
+          </ul>
+        </div>
+        <div v-else class="ins-body" key="idle">
+          <p class="blurb">{{ profile.statement }}</p>
+          <p class="mono muted hint">Hover the tool to assemble it · hover a coloured segment to deploy its tool</p>
+        </div>
+      </Transition>
     </div>
 
-    <div class="readout">
-      <div class="mono small muted">SECTION</div>
-      <div class="mono big accent">{{ sectionMeta[active].code }}</div>
-      <div class="mono">{{ sectionMeta[active].label }}</div>
-    </div>
+    <!-- Accessible legend that also drives the 3D scene -->
+    <nav class="legend" aria-label="Specialist areas">
+      <button
+        v-for="(area, i) in areas"
+        :key="area.id"
+        type="button"
+        class="leg"
+        :class="{ on: activeId === area.id }"
+        :style="{ '--accent': area.accent }"
+        @mouseenter="hoverLegend(i)"
+        @mouseleave="hoverLegend(null)"
+        @focus="hoverLegend(i)"
+        @blur="hoverLegend(null)"
+      >
+        <span class="dot" />
+        <span class="mono">{{ area.label }}</span>
+      </button>
+    </nav>
+  </section>
 
-    <div class="progress">
-      <div class="mono small muted">DEPLOYMENT</div>
-      <div class="bar"><span :style="{ width: progress * 100 + '%' }" /></div>
-      <div class="mono small">{{ Math.round(progress * 100) }}%</div>
-    </div>
-  </div>
+  <main class="doc">
+    <section class="block">
+      <h3 class="mono section-title">Specialisms</h3>
+      <div class="grid areas-grid">
+        <article
+          v-for="area in areas"
+          :key="area.id"
+          class="areacard"
+          :style="{ '--accent': area.accent }"
+        >
+          <div class="ac-head">
+            <span class="dot" />
+            <span class="mono code">{{ area.code }}</span>
+            <h4>{{ area.label }}</h4>
+          </div>
+          <p class="blurb">{{ area.blurb }}</p>
+          <ul class="chips">
+            <li v-for="s in area.skills" :key="s" class="mono">{{ s }}</li>
+          </ul>
+          <div class="hls">
+            <div v-for="(h, hi) in area.highlights" :key="hi" class="hl">
+              <strong>{{ h.title }}</strong>
+              <span v-if="h.meta" class="mono muted">{{ h.meta }}</span>
+              <p v-if="h.detail">{{ h.detail }}</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
 
-  <!-- Scroll-driven content -->
-  <main class="scroll">
-    <section class="panel hero" :style="panelStyle(0)">
-      <div class="card">
-        <p class="mono small accent">// CV · IMPLEMENTATION / PM / PRODUCT / DEVELOPMENT / QA</p>
-        <h1>{{ profile.name }}<span class="creds">{{ profile.creds }}</span></h1>
-        <p class="role mono">{{ profile.title }}</p>
-        <p class="statement">{{ profile.statement }}</p>
-        <ul class="contact mono small">
-          <li>{{ contact.email }}</li>
-          <li>{{ contact.phone }}</li>
-          <li>
-            <a :href="contact.linkedinUrl" target="_blank" rel="noopener">{{ contact.linkedin }}</a>
+    <section class="block">
+      <h3 class="mono section-title">Experience</h3>
+      <div v-for="co in experience" :key="co.name" class="company">
+        <div class="co-head">
+          <h4>{{ co.name }}</h4>
+          <span v-if="co.meta" class="mono muted">{{ co.meta }}</span>
+        </div>
+        <div v-for="(role, ri) in co.roles" :key="ri" class="role-item">
+          <div class="role-head">
+            <strong>{{ role.title }}</strong>
+            <span class="mono muted">{{ role.period }}</span>
+          </div>
+          <p v-if="role.location" class="mono muted loc">{{ role.location }}</p>
+          <p v-if="role.summary" class="blurb">{{ role.summary }}</p>
+          <ul v-if="role.bullets" class="bullets">
+            <li v-for="(b, bi) in role.bullets" :key="bi">{{ b }}</li>
+          </ul>
+          <ul v-if="role.skills" class="chips">
+            <li v-for="s in role.skills" :key="s" class="mono">{{ s }}</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="block two">
+      <div>
+        <h3 class="mono section-title">Education</h3>
+        <ul class="rows">
+          <li v-for="ed in education" :key="ed.place">
+            <strong>{{ ed.place }}</strong>
+            <span class="mono muted">{{ ed.award }}</span>
           </li>
         </ul>
-        <p class="mono small muted scrollhint">SCROLL TO DEPLOY TOOLS ↓</p>
       </div>
-    </section>
-
-    <section
-      v-for="(area, i) in areas"
-      :key="area.id"
-      class="panel"
-      :style="panelStyle(i + 1)"
-    >
-      <div class="card">
-        <div class="card-head">
-          <span class="mono code accent">TOOL {{ area.code }}</span>
-          <span class="mono muted tool-name">{{ area.toolName }}</span>
-        </div>
-        <h2>{{ area.label }}</h2>
-        <p class="tagline mono">{{ area.tagline }}</p>
-        <p class="blurb">{{ area.blurb }}</p>
-
-        <ul class="chips">
-          <li v-for="skill in area.skills" :key="skill" class="mono small">{{ skill }}</li>
+      <div>
+        <h3 class="mono section-title">Accolades</h3>
+        <ul class="accolades">
+          <li v-for="(a, ai) in accolades" :key="ai">{{ a }}</li>
         </ul>
-
-        <div class="highlights">
-          <div v-for="(h, hi) in area.highlights" :key="hi" class="hl">
-            <div class="hl-head">
-              <span class="hl-title">{{ h.title }}</span>
-              <span v-if="h.meta" class="mono small muted">{{ h.meta }}</span>
-            </div>
-            <p v-if="h.detail" class="hl-detail">{{ h.detail }}</p>
-          </div>
-        </div>
       </div>
     </section>
 
-    <section class="panel" :style="panelStyle(SECTION_COUNT - 1)">
-      <div class="card dossier">
-        <div class="card-head">
-          <span class="mono code accent">SHEET 05</span>
-          <span class="mono muted tool-name">Full assembly</span>
-        </div>
-        <h2>Dossier</h2>
-
-        <div class="dossier-grid">
-          <div>
-            <h3 class="mono">Employment</h3>
-            <ul class="rows">
-              <li v-for="role in employment" :key="role.title">
-                <span class="row-title">{{ role.title }}</span>
-                <span class="mono small muted">{{ role.period }}</span>
-              </li>
-            </ul>
-
-            <h3 class="mono">Education</h3>
-            <ul class="rows">
-              <li v-for="ed in education" :key="ed.place">
-                <span class="row-title">{{ ed.place }}</span>
-                <span class="mono small muted">{{ ed.award }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div>
-            <h3 class="mono">Accolades</h3>
-            <ul class="accolades">
-              <li v-for="(a, ai) in accolades" :key="ai">{{ a }}</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </section>
+    <footer class="foot mono muted">
+      Built with Vue 3 + Three.js · WebGL, static &amp; free to host.
+    </footer>
   </main>
 </template>
 
 <style scoped>
-/* ---- CAD heads-up display ---- */
-.hud {
-  position: fixed;
-  inset: 0;
-  z-index: 1;
+/* ---------- HERO ---------- */
+.hero {
+  position: relative;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+}
+
+.masthead {
+  position: absolute;
+  top: clamp(20px, 4vw, 46px);
+  left: clamp(20px, 4vw, 52px);
+  z-index: 2;
+  max-width: min(46ch, 70vw);
   pointer-events: none;
 }
-.crop {
-  position: absolute;
-  width: 16px;
-  height: 16px;
-  border: 1.5px solid var(--line-strong);
+.masthead .contact {
+  pointer-events: auto;
 }
-.crop.tl {
-  top: 16px;
-  left: 16px;
-  border-right: none;
-  border-bottom: none;
+.kicker {
+  color: var(--accent, #3b82f6);
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  margin: 0 0 8px;
 }
-.crop.tr {
-  top: 16px;
-  right: 16px;
-  border-left: none;
-  border-bottom: none;
-}
-.crop.bl {
-  bottom: 16px;
-  left: 16px;
-  border-right: none;
-  border-top: none;
-}
-.crop.br {
-  bottom: 16px;
-  right: 16px;
-  border-left: none;
-  border-top: none;
-}
-.titleblock {
-  position: absolute;
-  top: 30px;
-  left: 34px;
-  display: grid;
-  gap: 3px;
-}
-.titleblock .big {
-  color: var(--ink);
-}
-.readout {
-  position: absolute;
-  left: 34px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: grid;
-  gap: 2px;
-  border-left: 2px solid var(--accent);
-  padding-left: 12px;
-}
-.readout .big {
-  font-size: 2.4rem;
-  line-height: 1;
-}
-.progress {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  bottom: 34px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 14px;
-}
-.bar {
-  height: 3px;
-  background: var(--line-strong);
-  position: relative;
-}
-.bar span {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--accent);
-}
-
-.scroll {
-  position: relative;
-  z-index: 2;
-}
-.panel {
-  min-height: 100svh;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding: clamp(20px, 5vw, 80px);
-  padding-right: clamp(20px, 6vw, 120px);
-}
-.panel .card {
-  width: min(46ch, 92vw);
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(18, 24, 31, 0.14);
-  border-radius: 4px;
-  padding: clamp(20px, 2.4vw, 34px);
-  backdrop-filter: blur(9px) saturate(1.05);
-  box-shadow: 0 20px 50px rgba(31, 41, 55, 0.14);
-  will-change: opacity, transform;
-}
-.hero .card {
-  width: min(52ch, 94vw);
-}
-
 h1 {
-  font-size: clamp(2.1rem, 5vw, 3.4rem);
-  line-height: 1.02;
-  letter-spacing: -0.02em;
-  margin: 10px 0 6px;
+  font-size: clamp(2.2rem, 5.4vw, 3.6rem);
+  letter-spacing: -0.025em;
+  line-height: 1;
+  margin: 0;
 }
 .creds {
-  display: inline-block;
   margin-left: 10px;
-  font-size: 0.34em;
   font-family: var(--mono);
+  font-size: 0.32em;
   color: var(--muted);
   vertical-align: middle;
-  letter-spacing: 0.02em;
-}
-h2 {
-  font-size: clamp(1.7rem, 4vw, 2.6rem);
-  letter-spacing: -0.02em;
-  margin: 4px 0 6px;
-}
-h3 {
-  font-size: 0.72rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin: 20px 0 8px;
 }
 .role {
-  color: var(--ink);
-  font-size: 0.82rem;
-  letter-spacing: 0.04em;
-  margin: 0 0 16px;
-}
-.statement {
+  margin: 8px 0 0;
   color: var(--ink-soft);
-  line-height: 1.6;
-  font-size: 0.98rem;
+  font-size: 0.9rem;
 }
 .contact {
   list-style: none;
-  padding: 0;
-  margin: 20px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px 18px;
-  color: var(--ink-soft);
+  gap: 4px 16px;
+  padding: 0;
+  margin: 14px 0 0;
+  font-size: 0.72rem;
+  color: var(--muted);
 }
 .contact a {
-  color: var(--accent);
+  color: var(--ink);
   text-decoration: none;
-}
-.contact a:hover {
-  text-decoration: underline;
-}
-.scrollhint {
-  margin-top: 22px;
-  animation: pulse 2.4s ease-in-out infinite;
-}
-@keyframes pulse {
-  50% {
-    opacity: 0.4;
-  }
+  border-bottom: 1px solid var(--line-strong);
 }
 
-.card-head {
+.inspector {
+  --accent: #3b82f6;
+  position: absolute;
+  right: clamp(20px, 4vw, 52px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: min(34ch, 82vw);
+  background: rgba(255, 255, 255, 0.62);
+  border: 1px solid rgba(18, 24, 31, 0.1);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 20px 22px;
+  backdrop-filter: blur(10px) saturate(1.1);
+  box-shadow: 0 18px 44px rgba(24, 33, 46, 0.14);
+  pointer-events: none;
+}
+.ins-head {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
   gap: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid rgba(18, 24, 31, 0.14);
+  font-size: 0.74rem;
 }
 .code {
-  letter-spacing: 0.16em;
-  font-size: 0.78rem;
+  color: var(--accent);
+  letter-spacing: 0.14em;
 }
-.tool-name {
-  font-size: 0.76rem;
+.inspector h2 {
+  margin: 8px 0 2px;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
 }
 .tagline {
   color: var(--muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.03em;
-  margin: 8px 0 14px;
-}
-.blurb {
-  color: var(--ink-soft);
-  line-height: 1.6;
-  font-size: 0.95rem;
+  font-size: 0.74rem;
+  margin: 0 0 12px;
 }
 
+.legend {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(18px, 3vw, 34px);
+  transform: translateX(-50%);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.leg {
+  --accent: #3b82f6;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: inherit;
+  font-size: 0.74rem;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(18, 24, 31, 0.12);
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  backdrop-filter: blur(6px);
+}
+.leg:hover,
+.leg.on,
+.leg:focus-visible {
+  transform: translateY(-2px);
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(24, 33, 46, 0.16);
+  outline: none;
+}
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
+}
+
+/* ---------- BLURBS / CHIPS shared ---------- */
+.blurb {
+  color: var(--ink-soft);
+  line-height: 1.58;
+  font-size: 0.92rem;
+  margin: 0;
+}
 .chips {
   list-style: none;
   padding: 0;
-  margin: 18px 0 0;
+  margin: 14px 0 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px;
 }
 .chips li {
-  border: 1px solid rgba(18, 24, 31, 0.2);
-  border-radius: 2px;
-  padding: 4px 9px;
+  border: 1px solid rgba(18, 24, 31, 0.16);
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 0.68rem;
+  background: rgba(255, 255, 255, 0.6);
+}
+.hint {
+  margin-top: 16px;
   font-size: 0.72rem;
-  color: var(--ink);
-  background: rgba(255, 255, 255, 0.5);
 }
 
-.highlights {
-  margin-top: 18px;
+/* ---------- DOCUMENT ---------- */
+.doc {
+  position: relative;
+  z-index: 2;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: clamp(30px, 6vw, 90px) clamp(20px, 5vw, 48px) 60px;
+}
+.block {
+  margin-bottom: clamp(40px, 7vw, 84px);
+}
+.section-title {
+  font-size: 0.74rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-strong);
+  padding-bottom: 10px;
+  margin: 0 0 24px;
+}
+.grid {
   display: grid;
-  gap: 12px;
+  gap: 18px;
+}
+.areas-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.areacard {
+  --accent: #3b82f6;
+  border: 1px solid rgba(18, 24, 31, 0.1);
+  border-top: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.6);
+}
+.ac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ac-head h4 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+.ac-head .code {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+.hls {
+  margin-top: 14px;
+  display: grid;
+  gap: 10px;
 }
 .hl {
   border-left: 2px solid var(--accent);
-  padding-left: 12px;
+  padding-left: 10px;
 }
-.hl-head {
+.hl strong {
+  font-size: 0.9rem;
+}
+.hl p {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.company {
+  margin-bottom: 30px;
+}
+.co-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.co-head h4 {
+  margin: 0;
+  font-size: 1.2rem;
+}
+.role-item {
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.role-head {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
   align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-.hl-title {
-  font-weight: 600;
-  font-size: 0.95rem;
+.role-head strong {
+  font-size: 1rem;
 }
-.hl-detail {
-  margin: 3px 0 0;
+.loc {
+  margin: 2px 0 8px;
+  font-size: 0.72rem;
+}
+.bullets {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
   color: var(--ink-soft);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   line-height: 1.5;
 }
 
-.dossier {
-  width: min(64ch, 94vw);
-}
-.dossier-grid {
+.two {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 26px;
+  gap: 40px;
 }
 .rows {
   list-style: none;
   padding: 0;
   margin: 0;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 .rows li {
   display: flex;
   flex-direction: column;
   gap: 2px;
-}
-.row-title {
-  font-weight: 600;
-  font-size: 0.92rem;
 }
 .accolades {
   margin: 0;
@@ -460,13 +456,31 @@ h3 {
   font-size: 0.9rem;
   line-height: 1.45;
 }
+.foot {
+  text-align: center;
+  font-size: 0.72rem;
+  padding-top: 20px;
+  border-top: 1px solid var(--line);
+}
 
-@media (max-width: 720px) {
-  .panel {
-    justify-content: center;
-    padding-right: clamp(20px, 5vw, 80px);
+.swap-enter-active,
+.swap-leave-active {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+.swap-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.swap-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+@media (max-width: 820px) {
+  .inspector {
+    display: none;
   }
-  .dossier-grid {
+  .two {
     grid-template-columns: 1fr;
   }
 }
