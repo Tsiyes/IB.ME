@@ -1,9 +1,9 @@
 # Multi-Tool CV — Isaac Bristow
 
-An interactive CV presented as a **3D folding penknife**. At rest the tool sits in an
-**exploded** assembly view (scales, colored area liners, pins and steel tools fanned
-apart along the pivot axis). **Hover** the model to assemble it, then hover one of the
-four colored zones to swing that area's tool open. Each zone maps to a specialist area:
+An interactive CV presented as a **3D folding penknife**. At rest it sits assembled at
+a canted 3/4 angle so the colored area inserts are visible between the scales. **Hover**
+the model to gradually **explode** it along the pivot axis, then hover one of the
+colored inserts to swing that area's tool open. Each insert maps to a specialist area:
 
 1. **Development**
 2. **Product**
