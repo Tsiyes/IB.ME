@@ -247,7 +247,7 @@ export function createMultitool(
     envMapIntensity: 0.5,
   })
   disposables.push(inkMat)
-  const RECESS = 0.09
+  const RECESS = 0.04
 
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
   const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
