@@ -6,7 +6,7 @@
 // `accent` colours the segment's synthetic material and its UI highlights.
 // -----------------------------------------------------------------------------
 
-export type ToolKind = 'screwdriver' | 'blade' | 'wrench' | 'scalpel'
+export type ToolKind = 'screwdriver' | 'magnifier' | 'pencil' | 'scalpel'
 
 export interface Highlight {
   title: string
@@ -67,7 +67,7 @@ export const areas: Area[] = [
     id: 'development',
     code: '01',
     label: 'Development',
-    toolName: 'Flat driver',
+    toolName: 'Screwdriver',
     tool: 'screwdriver',
     tagline: 'Building & integrating the systems',
     blurb:
@@ -103,8 +103,8 @@ export const areas: Area[] = [
     id: 'product',
     code: '02',
     label: 'Product',
-    toolName: 'Blade',
-    tool: 'blade',
+    toolName: 'Magnifier',
+    tool: 'magnifier',
     tagline: 'Shaping compliant, usable products',
     blurb:
       'Owning product direction for regulated medical software — balancing clinical needs, usability and the certification bar that healthcare devices must clear.',
@@ -136,8 +136,8 @@ export const areas: Area[] = [
     id: 'management',
     code: '03',
     label: 'Management',
-    toolName: 'Spanner',
-    tool: 'wrench',
+    toolName: 'Pencil',
+    tool: 'pencil',
     tagline: 'Co-ordinating delivery at scale',
     blurb:
       'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour and a bias toward measurable outcomes.',
