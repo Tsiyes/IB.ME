@@ -6,7 +6,7 @@
 // `accent` colours the segment's synthetic material and its UI highlights.
 // -----------------------------------------------------------------------------
 
-export type ToolKind = 'driver' | 'scissors' | 'corkscrew' | 'blade'
+export type ToolKind = 'driver' | 'scissors' | 'saw' | 'blade'
 
 export interface Highlight {
   title: string
@@ -136,8 +136,8 @@ export const areas: Area[] = [
     id: 'management',
     code: '03',
     label: 'Management',
-    toolName: 'Corkscrew',
-    tool: 'corkscrew',
+    toolName: 'Saw',
+    tool: 'saw',
     tagline: 'Co-ordinating delivery at scale',
     blurb:
       'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour and a bias toward measurable outcomes.',

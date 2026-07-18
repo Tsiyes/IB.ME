@@ -34,8 +34,8 @@ const TOOL_DEPTH = 0.12
 const SCALE_D = 0.14
 const LINER_D = 0.06
 
-// Per-tool deploy rig: Swiss-army variety — opposite pivot ends, full 180°
-// swings, and a spine tool that pops ~90° out of the back.
+// Per-tool deploy rig: Swiss-army variety — opposite pivot ends and distinct
+// swing angles so the fan doesn't read as four identical arcs.
 interface ToolRig {
   pivotX: number
   closed: number
@@ -50,9 +50,9 @@ function toolRig(kind: ToolKind): ToolRig {
     case 'scissors':
       // Left pin → unfolds the other way so the fan reads from both ends.
       return { pivotX: -PIVOT_X, closed: 0, open: Math.PI * 0.78 }
-    case 'corkscrew':
-      // Right pin → ~90° spine deploy (classic corkscrew stance).
-      return { pivotX: PIVOT_X, closed: Math.PI, open: Math.PI * 0.52 }
+    case 'saw':
+      // Right pin → long outboard swing, distinct from the blade.
+      return { pivotX: PIVOT_X, closed: Math.PI, open: 0.62 }
     case 'blade':
       // Right pin → full extension, slightly past flat for a knife-blade fan.
       return { pivotX: PIVOT_X, closed: Math.PI, open: -0.28 }
@@ -97,24 +97,6 @@ function addPinHoles(shape: THREE.Shape) {
   }
 }
 
-// Offset a centerline into a thick ribbon outline (used for the corkscrew helix).
-function ribbonFromCenterline(center: THREE.Vector2[], halfW: number): THREE.Vector2[] {
-  const left: THREE.Vector2[] = []
-  const right: THREE.Vector2[] = []
-  for (let i = 0; i < center.length; i++) {
-    const prev = center[Math.max(0, i - 1)]
-    const next = center[Math.min(center.length - 1, i + 1)]
-    const tx = next.x - prev.x
-    const ty = next.y - prev.y
-    const len = Math.hypot(tx, ty) || 1
-    const nx = -ty / len
-    const ny = tx / len
-    left.push(new THREE.Vector2(center[i].x + nx * halfW, center[i].y + ny * halfW))
-    right.push(new THREE.Vector2(center[i].x - nx * halfW, center[i].y - ny * halfW))
-  }
-  return left.concat(right.reverse())
-}
-
 // Each tool is a folding implement with a rounded tang + pivot hole at the
 // origin and a recognizable working end pointing +X (local space).
 function toolShape(kind: ToolKind): THREE.Shape {
@@ -138,52 +120,54 @@ function toolShape(kind: ToolKind): THREE.Shape {
       break
     }
     case 'scissors': {
-      // Twin blades with finger-loop handles — reads clearly when fanned open.
+      // Spring-loaded SAK scissors in the open pose: fold pin beside the finger
+      // loop, blades out +X, lower lever angled down, V-spring between handles.
       s.moveTo(0, TOOL_TANG)
-      s.lineTo(0.32, 0.3)
-      s.lineTo(0.42, 0.48)
-      s.absarc(0.72, 0.42, 0.28, Math.PI * 0.85, Math.PI * 0.15, false)
-      s.lineTo(1.15, 0.2)
-      s.lineTo(2.35, 0.32)
-      s.lineTo(2.55, 0.1)
-      s.lineTo(1.35, 0.02)
-      s.lineTo(2.55, -0.08)
-      s.lineTo(2.32, -0.34)
-      s.lineTo(1.12, -0.18)
-      s.absarc(0.72, -0.42, 0.28, -Math.PI * 0.15, -Math.PI * 0.85, false)
-      s.lineTo(0.42, -0.48)
-      s.lineTo(0.32, -0.3)
+      s.lineTo(0.2, 0.18)
+      s.lineTo(0.36, 0.34)
+      // Finger-loop exterior (top → forward nose)
+      s.absellipse(0.7, 0.08, 0.38, 0.26, Math.PI * 0.85, -Math.PI * 0.18, false, 0)
+      // Long upper handle into the upper blade and tip
+      s.lineTo(1.62, 0.12)
+      s.lineTo(2.38, 0.18)
+      s.lineTo(2.7, 0.01)
+      // Lower blade back to the scissors' rivet
+      s.lineTo(2.32, -0.13)
+      s.lineTo(1.78, -0.08)
+      // Lower lever (thicker arm angled down)
+      s.quadraticCurveTo(1.4, -0.22, 1.08, -0.48)
+      s.lineTo(0.84, -0.5)
+      s.lineTo(0.8, -0.32)
+      s.lineTo(1.12, -0.2)
+      // V-spring: seats on the lever, apex down, fixed under the upper handle
+      s.lineTo(1.22, -0.24)
+      s.lineTo(1.02, -0.1)
+      s.lineTo(0.58, -0.02)
+      s.lineTo(0.34, -0.08)
+      s.lineTo(0.18, -0.16)
       s.lineTo(0, -TOOL_TANG)
       break
     }
-    case 'corkscrew': {
-      // Helical worm from a short shaft — spine tool silhouette.
-      const center: THREE.Vector2[] = []
-      for (let i = 0; i <= 56; i++) {
-        const t = i / 56
-        if (t < 0.2) {
-          center.push(new THREE.Vector2(t * 2.8, 0))
-        } else {
-          const u = (t - 0.2) / 0.8
-          const x = 0.56 + u * 1.9
-          const amp = 0.3 * (1 - u * 0.4)
-          const y = Math.sin(u * Math.PI * 2 * 3.25) * amp
-          center.push(new THREE.Vector2(x, y))
+    case 'saw': {
+      // Wood saw: straight spine, pointed tip, toothed belly.
+      s.moveTo(0, TOOL_TANG)
+      s.lineTo(0.55, 0.2)
+      s.lineTo(2.45, 0.2)
+      s.lineTo(2.72, 0.04)
+      s.lineTo(2.55, -0.06)
+      {
+        const x0 = 2.48
+        const x1 = 0.5
+        const teeth = 11
+        for (let i = 0; i <= teeth; i++) {
+          const t = i / teeth
+          const x = x0 + (x1 - x0) * t
+          const y = i % 2 === 0 ? -0.06 : -0.3
+          s.lineTo(x, y)
         }
       }
-      // Taper the ribbon toward the tip.
-      const outline = ribbonFromCenterline(center, 0.075)
-      // Rebuild with slight taper by scaling offsets near the tip — ribbon is uniform;
-      // pinch the last points toward the centerline tip for a point.
-      const tip = center[center.length - 1]
-      outline[center.length - 1].lerp(tip, 0.7)
-      outline[center.length].lerp(tip, 0.7)
-
-      s.moveTo(0, TOOL_TANG * 0.85)
-      // Blend tang into the ribbon start.
-      s.lineTo(outline[0].x, outline[0].y)
-      for (let i = 1; i < outline.length; i++) s.lineTo(outline[i].x, outline[i].y)
-      s.lineTo(0, -TOOL_TANG * 0.85)
+      s.lineTo(0.35, -0.16)
+      s.lineTo(0, -TOOL_TANG)
       break
     }
     case 'blade': {
@@ -207,12 +191,14 @@ function toolShape(kind: ToolKind): THREE.Shape {
   s.holes.push(hole)
 
   if (kind === 'scissors') {
-    const loopA = new THREE.Path()
-    loopA.absarc(0.72, 0.42, 0.14, 0, Math.PI * 2, true)
-    s.holes.push(loopA)
-    const loopB = new THREE.Path()
-    loopB.absarc(0.72, -0.42, 0.14, 0, Math.PI * 2, true)
-    s.holes.push(loopB)
+    // Finger loop
+    const loop = new THREE.Path()
+    loop.absellipse(0.72, 0.1, 0.22, 0.14, 0, Math.PI * 2, true, 0)
+    s.holes.push(loop)
+    // Scissors' own pivot rivet
+    const rivet = new THREE.Path()
+    rivet.absarc(1.68, -0.02, 0.07, 0, Math.PI * 2, true)
+    s.holes.push(rivet)
   }
 
   if (kind === 'blade') {
@@ -281,7 +267,7 @@ export function createMultitool(
   scene.add(rim)
 
   const assembly = new THREE.Group()
-  assembly.scale.setScalar(0.9) // ~10% smaller
+  assembly.scale.setScalar(0.765) // ~15% smaller than the previous 0.9 scale
   assembly.position.y = 1.15 // top-centre of the hero viewport
   scene.add(assembly)
 
@@ -529,7 +515,7 @@ export function createMultitool(
       bevelThickness: 0.02,
       bevelSize: 0.02,
       bevelSegments: 3,
-      curveSegments: area.tool === 'corkscrew' ? 28 : 14,
+      curveSegments: area.tool === 'scissors' ? 20 : 14,
       steps: 1,
     })
     toolGeo.translate(0, 0, -TOOL_DEPTH / 2)
