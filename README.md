@@ -1,8 +1,9 @@
 # Multi-Tool CV — Isaac Bristow
 
-An interactive CV presented as a **3D multi-tool**, styled like a viewport in CAD
-software (graphic-realism + minimalism). As you **scroll**, the tools deploy and
-rotate out of the handle one by one, each mapping to one of four specialist areas:
+An interactive CV presented as a **3D folding penknife**. At rest the tool sits in an
+**exploded** assembly view (scales, colored area liners, pins and steel tools fanned
+apart along the pivot axis). **Hover** the model to assemble it, then hover one of the
+four colored zones to swing that area's tool open. Each zone maps to a specialist area:
 
 1. **Development**
 2. **Product**
@@ -10,8 +11,9 @@ rotate out of the handle one by one, each mapping to one of four specialist area
 4. **Healthcare Sciences**
 
 Built with **Vue 3 + Vite + TypeScript**; the tool is real 3D via **Three.js**
-(WebGL) with a studio environment for realistic metal. The rest of the UI is a
-minimalist CAD "heads-up display" (title block, section readout, deployment bar).
+(WebGL) with a studio environment (`RoomEnvironment`) and clearcoat/chrome materials
+for a high-res synthetic look. Full experience, education and accolades are in the
+document below the interactive hero.
 
 ## Local development
 
@@ -34,10 +36,13 @@ control how its implement is drawn and how it deploys in 3D.
 
 ## Structure
 
-- `src/three/multitool.ts` — builds the Three.js scene (handle + extruded tools,
-  materials, lighting, environment) and exposes `setProgress()` driven by scroll.
-- `src/components/ToolScene.vue` — canvas + Three.js lifecycle/resize.
-- `src/App.vue` — scroll → progress mapping, CAD HUD, and the content panels.
+- `src/three/multitool.ts` — builds the Three.js penknife (scales, colored liners,
+  pins, folding tools), owns pointer/hover interaction, explode↔assemble + deploy
+  animation, and reports the active area via an `onAreaChange` callback.
+- `src/components/ToolScene.vue` — canvas + Three.js lifecycle/resize; forwards area
+  changes and accepts an optional `forceArea` (used by the accessible legend).
+- `src/App.vue` — hero overlay (inspector card + legend) and the document sections
+  (specialisms, experience, education, accolades).
 
 ## Deploying cheaply
 

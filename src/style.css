@@ -33,20 +33,11 @@ body {
   min-height: 100svh;
   color: var(--ink);
   background-color: var(--paper);
+  /* Clean studio backdrop — soft light pooling toward the centre, no grid. */
   background-image:
-    linear-gradient(var(--line) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line) 1px, transparent 1px),
-    linear-gradient(var(--line-strong) 1px, transparent 1px),
-    linear-gradient(90deg, var(--line-strong) 1px, transparent 1px),
-    radial-gradient(1200px 800px at 30% 10%, #f4f7fa 0%, transparent 60%),
-    radial-gradient(1000px 900px at 90% 100%, #dfe4ea 0%, transparent 55%);
-  background-size:
-    24px 24px,
-    24px 24px,
-    120px 120px,
-    120px 120px,
-    100% 100%,
-    100% 100%;
+    radial-gradient(1200px 820px at 50% 22%, #fdfefe 0%, transparent 62%),
+    radial-gradient(1100px 900px at 82% 108%, #dde3ea 0%, transparent 60%),
+    linear-gradient(180deg, #eef1f5 0%, #e4e8ee 100%);
   background-attachment: fixed;
 }
 
