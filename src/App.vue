@@ -1,13 +1,26 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import BotCheck from './components/BotCheck.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
 
+const unlocked = ref(false)
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 
 const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
 
+watch(
+  unlocked,
+  (ok) => {
+    document.body.style.overflow = ok ? '' : 'hidden'
+  },
+  { immediate: true },
+)
+
+function onUnlocked() {
+  unlocked.value = true
+}
 function onAreaChange(id: string | null) {
   activeId.value = id
 }
@@ -25,8 +38,12 @@ function onLegendActivate(areaId: string, index: number) {
 </script>
 
 <template>
-  <section class="hero">
-    <ToolScene :force-area="forceArea" @area-change="onAreaChange" />
+  <Transition name="gate">
+    <BotCheck v-if="!unlocked" @passed="onUnlocked" />
+  </Transition>
+
+  <section class="hero" :aria-hidden="!unlocked || undefined" :inert="!unlocked || undefined">
+    <ToolScene v-if="unlocked" :force-area="forceArea" @area-change="onAreaChange" />
 
     <!-- Identity is engraved on the tool's face plate; this heading is for
          accessibility / SEO only. -->
@@ -74,7 +91,7 @@ function onLegendActivate(areaId: string, index: number) {
     </button>
   </section>
 
-  <main class="doc">
+  <main class="doc" :aria-hidden="!unlocked || undefined" :inert="!unlocked || undefined">
     <section id="specialisms" class="block">
       <h3 class="mono section-title">Specialisms</h3>
       <div class="grid areas-grid">
@@ -518,6 +535,24 @@ function onLegendActivate(areaId: string, index: number) {
 .swap-leave-to {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+.gate-enter-active,
+.gate-leave-active {
+  transition: opacity 380ms ease;
+}
+.gate-enter-from,
+.gate-leave-to {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gate-enter-active,
+  .gate-leave-active,
+  .swap-enter-active,
+  .swap-leave-active {
+    transition: none;
+  }
 }
 
 @media (max-width: 820px) {
