@@ -1,0 +1,38 @@
+:root {
+  color-scheme: dark;
+  font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-height: 100dvh;
+  color: #e8ebf0;
+  background:
+    radial-gradient(1100px 700px at 15% -10%, #1c2634 0%, transparent 60%),
+    radial-gradient(900px 600px at 110% 120%, #241017 0%, transparent 55%),
+    #0b0e14;
+}
+
+#app {
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3 {
+  font-weight: 700;
+}
