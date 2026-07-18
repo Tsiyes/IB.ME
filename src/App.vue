@@ -24,15 +24,15 @@ function hoverLegend(index: number | null) {
          accessibility / SEO only. -->
     <h1 class="sr-only">{{ profile.name }} — {{ profile.title }}</h1>
 
-    <div class="blurb-panel" :style="activeArea ? { '--accent': activeArea.accent } : {}">
+    <div
+      class="blurb-panel"
+      :class="{ on: !!activeArea }"
+      :style="activeArea ? { '--accent': activeArea.accent } : {}"
+    >
       <Transition name="swap" mode="out-in">
         <div v-if="activeArea" :key="activeArea.id">
           <p class="panel-title">{{ activeArea.label }}</p>
           <p class="blurb">{{ activeArea.blurb }}</p>
-        </div>
-        <div v-else key="idle">
-          <p class="panel-title">{{ profile.name }}</p>
-          <p class="blurb">{{ profile.statement }}</p>
         </div>
       </Transition>
     </div>
@@ -164,13 +164,21 @@ function hoverLegend(index: number | null) {
 .blurb-panel {
   --accent: #3b82f6;
   position: absolute;
-  left: clamp(20px, 4vw, 52px);
-  bottom: clamp(70px, 12vh, 110px);
+  left: 50%;
+  bottom: clamp(78px, 12vh, 118px);
+  transform: translateX(-50%);
   z-index: 2;
-  max-width: min(40ch, 74vw);
-  border-left: 2px solid var(--accent);
-  padding-left: 14px;
+  width: min(52ch, 86vw);
+  text-align: center;
+  padding-top: 12px;
+  border-top: 2px solid transparent;
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 180ms ease, border-color 180ms ease;
+}
+.blurb-panel.on {
+  opacity: 1;
+  border-top-color: var(--accent);
 }
 .panel-title {
   margin: 0 0 6px;
