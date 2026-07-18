@@ -22,7 +22,6 @@ const HANDLE_H = 1.5
 // Pins sit nearer the ends so the face lettering has clear clearance.
 const PIVOT_X = HANDLE_L / 2 - 0.55 // end pin the tools rotate on
 const PIN_R = 0.12
-const N = areas.length
 // Accordion explosion + proximity gating.
 const GAP = 0.52 // base spacing between layers when exploded
 const ACCORDION = 1.7 // extra gap near the pointer focus
@@ -35,9 +34,30 @@ const TOOL_DEPTH = 0.12
 const SCALE_D = 0.14
 const LINER_D = 0.06
 
-const CLOSED = Math.PI // tools point back into the handle when stowed
-// Deploy angles fan the tools upward out of the end.
-const openAngle = (i: number) => Math.PI * (0.5 + (i - (N - 1) / 2) * 0.1)
+// Per-tool deploy rig: Swiss-army variety — opposite pivot ends, full 180°
+// swings, and a spine tool that pops ~90° out of the back.
+interface ToolRig {
+  pivotX: number
+  closed: number
+  open: number
+}
+
+function toolRig(kind: ToolKind): ToolRig {
+  switch (kind) {
+    case 'driver':
+      // Right pin → swings out and slightly up (bottle-opener / flat driver).
+      return { pivotX: PIVOT_X, closed: Math.PI, open: 0.38 }
+    case 'scissors':
+      // Left pin → unfolds the other way so the fan reads from both ends.
+      return { pivotX: -PIVOT_X, closed: 0, open: Math.PI * 0.78 }
+    case 'corkscrew':
+      // Right pin → ~90° spine deploy (classic corkscrew stance).
+      return { pivotX: PIVOT_X, closed: Math.PI, open: Math.PI * 0.52 }
+    case 'blade':
+      // Right pin → full extension, slightly past flat for a knife-blade fan.
+      return { pivotX: PIVOT_X, closed: Math.PI, open: -0.28 }
+  }
+}
 
 function ease(t: number) {
   return t * t * (3 - 2 * t)
@@ -77,62 +97,131 @@ function addPinHoles(shape: THREE.Shape) {
   }
 }
 
+// Offset a centerline into a thick ribbon outline (used for the corkscrew helix).
+function ribbonFromCenterline(center: THREE.Vector2[], halfW: number): THREE.Vector2[] {
+  const left: THREE.Vector2[] = []
+  const right: THREE.Vector2[] = []
+  for (let i = 0; i < center.length; i++) {
+    const prev = center[Math.max(0, i - 1)]
+    const next = center[Math.min(center.length - 1, i + 1)]
+    const tx = next.x - prev.x
+    const ty = next.y - prev.y
+    const len = Math.hypot(tx, ty) || 1
+    const nx = -ty / len
+    const ny = tx / len
+    left.push(new THREE.Vector2(center[i].x + nx * halfW, center[i].y + ny * halfW))
+    right.push(new THREE.Vector2(center[i].x - nx * halfW, center[i].y - ny * halfW))
+  }
+  return left.concat(right.reverse())
+}
+
 // Each tool is a folding implement with a rounded tang + pivot hole at the
-// origin and a recognizable working end pointing +X.
+// origin and a recognizable working end pointing +X (local space).
 function toolShape(kind: ToolKind): THREE.Shape {
   const s = new THREE.Shape()
-  s.moveTo(0, TOOL_TANG)
+
   switch (kind) {
-    case 'screwdriver': // flat driver
-      s.lineTo(1.7, 0.11)
-      s.lineTo(1.74, 0.2)
-      s.lineTo(2.2, 0.16)
-      s.lineTo(2.2, -0.16)
-      s.lineTo(1.74, -0.2)
-      s.lineTo(1.7, -0.11)
-      s.lineTo(0, -TOOL_TANG)
-      break
-    case 'magnifier': {
-      // shaft out to a lens ring
-      const cx = 2.25
-      const R = 0.52
-      const a0 = THREE.MathUtils.degToRad(158)
-      const a1 = THREE.MathUtils.degToRad(-158)
-      s.lineTo(1.45, 0.18)
-      s.lineTo(cx + R * Math.cos(a0), R * Math.sin(a0))
-      s.absarc(cx, 0, R, a0, a1, true)
-      s.lineTo(1.45, -0.18)
+    case 'driver': {
+      // Bottle-opener notch + flat screwdriver tip — classic SAK combo tool.
+      s.moveTo(0, TOOL_TANG)
+      s.lineTo(1.15, 0.17)
+      s.lineTo(1.45, 0.17)
+      s.lineTo(1.62, 0.4)
+      s.lineTo(2.02, 0.4)
+      s.lineTo(1.78, 0.12)
+      s.lineTo(2.2, 0.11)
+      s.lineTo(2.48, 0.15)
+      s.lineTo(2.48, -0.15)
+      s.lineTo(2.2, -0.11)
+      s.lineTo(1.55, -0.2)
       s.lineTo(0, -TOOL_TANG)
       break
     }
-    case 'pencil': // uniform shaft to a sharpened conical point
-      s.lineTo(2.0, 0.16)
-      s.lineTo(2.62, 0.0)
-      s.lineTo(2.0, -0.16)
+    case 'scissors': {
+      // Twin blades with finger-loop handles — reads clearly when fanned open.
+      s.moveTo(0, TOOL_TANG)
+      s.lineTo(0.32, 0.3)
+      s.lineTo(0.42, 0.48)
+      s.absarc(0.72, 0.42, 0.28, Math.PI * 0.85, Math.PI * 0.15, false)
+      s.lineTo(1.15, 0.2)
+      s.lineTo(2.35, 0.32)
+      s.lineTo(2.55, 0.1)
+      s.lineTo(1.35, 0.02)
+      s.lineTo(2.55, -0.08)
+      s.lineTo(2.32, -0.34)
+      s.lineTo(1.12, -0.18)
+      s.absarc(0.72, -0.42, 0.28, -Math.PI * 0.15, -Math.PI * 0.85, false)
+      s.lineTo(0.42, -0.48)
+      s.lineTo(0.32, -0.3)
       s.lineTo(0, -TOOL_TANG)
       break
-    case 'scalpel': // fine pointed blade
-      s.lineTo(1.6, 0.18)
-      s.lineTo(2.55, 0.03)
-      s.lineTo(2.5, -0.05)
-      s.lineTo(1.3, -0.2)
+    }
+    case 'corkscrew': {
+      // Helical worm from a short shaft — spine tool silhouette.
+      const center: THREE.Vector2[] = []
+      for (let i = 0; i <= 56; i++) {
+        const t = i / 56
+        if (t < 0.2) {
+          center.push(new THREE.Vector2(t * 2.8, 0))
+        } else {
+          const u = (t - 0.2) / 0.8
+          const x = 0.56 + u * 1.9
+          const amp = 0.3 * (1 - u * 0.4)
+          const y = Math.sin(u * Math.PI * 2 * 3.25) * amp
+          center.push(new THREE.Vector2(x, y))
+        }
+      }
+      // Taper the ribbon toward the tip.
+      const outline = ribbonFromCenterline(center, 0.075)
+      // Rebuild with slight taper by scaling offsets near the tip — ribbon is uniform;
+      // pinch the last points toward the centerline tip for a point.
+      const tip = center[center.length - 1]
+      outline[center.length - 1].lerp(tip, 0.7)
+      outline[center.length].lerp(tip, 0.7)
+
+      s.moveTo(0, TOOL_TANG * 0.85)
+      // Blend tang into the ribbon start.
+      s.lineTo(outline[0].x, outline[0].y)
+      for (let i = 1; i < outline.length; i++) s.lineTo(outline[i].x, outline[i].y)
+      s.lineTo(0, -TOOL_TANG * 0.85)
+      break
+    }
+    case 'blade': {
+      // Full spear-point knife blade with a belly on the edge.
+      s.moveTo(0, TOOL_TANG)
+      s.lineTo(0.85, 0.24)
+      s.lineTo(1.9, 0.22)
+      s.quadraticCurveTo(2.45, 0.18, 2.8, 0.02)
+      s.quadraticCurveTo(2.35, -0.2, 1.7, -0.22)
+      s.lineTo(0.8, -0.24)
       s.lineTo(0, -TOOL_TANG)
       break
+    }
   }
-  // rounded tang (left semicircle) back to the start point
+
+  // Rounded tang (left semicircle) back to the start point.
   s.absarc(0, 0, TOOL_TANG, -Math.PI / 2, Math.PI / 2, true)
 
-  // pivot hole
   const hole = new THREE.Path()
   hole.absarc(0, 0, TOOL_HOLE, 0, Math.PI * 2, true)
   s.holes.push(hole)
 
-  // magnifier lens cut-out
-  if (kind === 'magnifier') {
-    const lens = new THREE.Path()
-    lens.absarc(2.25, 0, 0.34, 0, Math.PI * 2, true)
-    s.holes.push(lens)
+  if (kind === 'scissors') {
+    const loopA = new THREE.Path()
+    loopA.absarc(0.72, 0.42, 0.14, 0, Math.PI * 2, true)
+    s.holes.push(loopA)
+    const loopB = new THREE.Path()
+    loopB.absarc(0.72, -0.42, 0.14, 0, Math.PI * 2, true)
+    s.holes.push(loopB)
   }
+
+  if (kind === 'blade') {
+    // Nail nick
+    const nick = new THREE.Path()
+    nick.absellipse(1.15, 0.02, 0.16, 0.07, 0, Math.PI * 2, true, 0)
+    s.holes.push(nick)
+  }
+
   return s
 }
 
@@ -141,6 +230,8 @@ interface ToolNode {
   pivot: THREE.Group // rotates to deploy the tool
   toolMat: THREE.MeshPhysicalMaterial
   linerMat: THREE.MeshPhysicalMaterial
+  closed: number
+  open: number
   hover: number
 }
 
@@ -430,14 +521,15 @@ export function createMultitool(
     layer.add(linerMesh)
     pickTargets.push(linerMesh)
 
-    // steel tool on a pivot
+    // Steel tool on a per-kind pivot / swing path.
+    const rig = toolRig(area.tool)
     const toolGeo = new THREE.ExtrudeGeometry(toolShape(area.tool), {
       depth: TOOL_DEPTH,
       bevelEnabled: true,
       bevelThickness: 0.02,
       bevelSize: 0.02,
       bevelSegments: 3,
-      curveSegments: 14,
+      curveSegments: area.tool === 'corkscrew' ? 28 : 14,
       steps: 1,
     })
     toolGeo.translate(0, 0, -TOOL_DEPTH / 2)
@@ -449,8 +541,8 @@ export function createMultitool(
     pickTargets.push(toolMesh)
 
     const pivot = new THREE.Group()
-    pivot.position.set(PIVOT_X, 0, 0)
-    pivot.rotation.z = CLOSED
+    pivot.position.set(rig.pivotX, 0, 0)
+    pivot.rotation.z = rig.closed
     pivot.add(toolMesh)
     layer.add(pivot)
 
@@ -459,6 +551,8 @@ export function createMultitool(
       pivot,
       toolMat,
       linerMat,
+      closed: rig.closed,
+      open: rig.open,
       hover: 0,
     })
   })
@@ -671,7 +765,7 @@ export function createMultitool(
         armedToolClick = false
       }
 
-      tool.pivot.rotation.z = lerp(CLOSED, openAngle(i), deploy)
+      tool.pivot.rotation.z = lerp(tool.closed, tool.open, deploy)
       tool.toolMat.envMapIntensity = 1.7 + h * 0.6
       tool.linerMat.emissiveIntensity = 0.06 + h * 0.5
     }
