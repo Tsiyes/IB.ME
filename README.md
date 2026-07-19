@@ -13,7 +13,8 @@ Requires Node.js 22+.
 npm install     # install dependencies
 npm run dev     # dev server at http://localhost:5173
 npm run lint    # ESLint (flat config)
-npm run build   # type-check (vue-tsc) + production build to ./dist
+npm run build   # type-check + production build + smoke checks on ./dist
+npm run test    # smoke checks only (expects ./dist from a prior build)
 npm run preview # preview the production build
 ```
 
@@ -40,10 +41,12 @@ control how its implement is drawn and how it deploys in 3D.
 
 - **Cloudflare Pages** / **Netlify** — connect the repo, build `npm run build`,
   output `dist`. Keep the default `base: '/'`.
-- **GitHub Pages** — workflow at [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml);
-  enable Settings → Pages → Source = "GitHub Actions" (it sets `BASE_PATH` for
-  project pages automatically). An inline boot check in `index.html` reloads once
-  if a cached HTML shell points at a superseded hashed JS bundle after redeploy.
+- **GitHub Pages** — workflow at [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+  **Source must be "GitHub Actions"** (Settings → Pages). If Source is "Deploy from a
+  branch" on `main`, GitHub serves the raw Vue `index.html` instead of `./dist` and
+  the site breaks. The workflow sets `BASE_PATH` for project pages automatically.
+  `public/cache-bust.js` reloads once if a cached HTML shell points at a superseded
+  hashed JS bundle after redeploy.
 
 ### Custom domain
 

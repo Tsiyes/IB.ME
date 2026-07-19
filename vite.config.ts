@@ -1,5 +1,21 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
+
+/** Inject the public cache-bust boot script with the correct `base` prefix. */
+function htmlCacheBust(): Plugin {
+  return {
+    name: 'html-cache-bust',
+    transformIndexHtml(html) {
+      if (html.includes('cache-bust.js')) return html
+      const base = process.env.BASE_PATH || '/'
+      const normalized = base.endsWith('/') ? base : `${base}/`
+      return html.replace(
+        /<\/body>/i,
+        `    <script src="${normalized}cache-bust.js" defer></script>\n  </body>`,
+      )
+    },
+  }
+}
 
 // https://vite.dev/config/
 // `base` can be overridden at build time (e.g. for project-page hosting on
@@ -7,7 +23,7 @@ import vue from '@vitejs/plugin-vue'
 // for custom domains and Cloudflare Pages.
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
-  plugins: [vue()],
+  plugins: [vue(), htmlCacheBust()],
   server: {
     host: true,
     port: 5173,
