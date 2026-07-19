@@ -5,8 +5,3 @@ declare module '*.vue' {
   const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
   export default component
 }
-
-declare module '*.ttf?url' {
-  const src: string
-  export default src
-}
