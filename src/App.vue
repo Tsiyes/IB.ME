@@ -6,6 +6,7 @@ import { accolades, areas, contact, education, experience, profile } from './dat
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const unlocked = ref(false)
+const introDone = ref(false)
 const expanded = ref(false)
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
@@ -13,7 +14,11 @@ const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
 
 const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
-const showBlurb = computed(() => !!activeArea.value || !expanded.value)
+// ABOUT ME waits for the construct intro; hides again while the tool is expanded.
+const showBlurb = computed(
+  () => !!activeArea.value || (introDone.value && !expanded.value),
+)
+const heroLive = computed(() => unlocked.value && introDone.value)
 
 watch(
   unlocked,
@@ -40,6 +45,9 @@ function onAreaChange(id: string | null) {
 function onExpandChange(isExpanded: boolean) {
   expanded.value = isExpanded
 }
+function onIntroComplete() {
+  introDone.value = true
+}
 function hoverLegend(index: number | null) {
   forceArea.value = index
 }
@@ -58,12 +66,14 @@ function onLegendActivate(areaId: string, index: number) {
     <BotCheck v-if="!unlocked" @passed="onUnlocked" />
   </Transition>
 
-  <section class="hero" :aria-hidden="!unlocked || undefined" :inert="!unlocked || undefined">
+  <!-- Scene mounts immediately (under the gate) so WebGL warms during the check. -->
+  <section class="hero" :aria-hidden="!heroLive || undefined" :inert="!heroLive || undefined">
     <ToolScene
-      v-if="unlocked"
       :force-area="forceArea"
+      :run-intro="unlocked"
       @area-change="onAreaChange"
       @expand-change="onExpandChange"
+      @intro-complete="onIntroComplete"
     />
 
     <!-- Identity is engraved on the tool's face plate; this heading is for
@@ -80,7 +90,7 @@ function onLegendActivate(areaId: string, index: number) {
           <p class="panel-title">{{ activeArea.label }}</p>
           <p class="blurb">{{ activeArea.blurb }}</p>
         </div>
-        <div v-else-if="!expanded" key="idle">
+        <div v-else-if="introDone && !expanded" key="idle">
           <p class="panel-title">ABOUT ME</p>
           <p class="blurb">{{ profile.statement }}</p>
         </div>
@@ -88,7 +98,7 @@ function onLegendActivate(areaId: string, index: number) {
     </div>
 
     <!-- Accessible legend that also drives the 3D scene -->
-    <nav class="legend" aria-label="Specialist areas">
+    <nav class="legend" :class="{ on: introDone }" aria-label="Specialist areas">
       <button
         v-for="(area, i) in areas"
         :key="area.id"
@@ -107,7 +117,12 @@ function onLegendActivate(areaId: string, index: number) {
       </button>
     </nav>
 
-    <button type="button" class="scroll-cue" @click="scrollToSpecialisms()">
+    <button
+      type="button"
+      class="scroll-cue"
+      :class="{ on: introDone }"
+      @click="scrollToSpecialisms()"
+    >
       <span class="mono">Specialisms</span>
       <span class="chev" aria-hidden="true" />
     </button>
@@ -278,6 +293,11 @@ function onLegendActivate(areaId: string, index: number) {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+.legend.on {
+  opacity: 1;
 }
 
 .scroll-cue {
@@ -300,6 +320,11 @@ function onLegendActivate(areaId: string, index: number) {
   text-transform: uppercase;
   color: var(--muted);
   cursor: pointer;
+  opacity: 0;
+  transition: opacity 420ms ease, color 160ms ease;
+}
+.scroll-cue.on {
+  opacity: 1;
 }
 .scroll-cue:hover,
 .scroll-cue:focus-visible {

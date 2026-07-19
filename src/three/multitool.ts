@@ -224,12 +224,15 @@ export interface Multitool {
   resize: () => void
   dispose: () => void
   setActiveArea: (index: number | null) => void
+  playIntro: () => void
 }
 
 export interface MultitoolOptions {
   onAreaChange?: (id: string | null) => void
   /** Fires when the accordion crosses the expanded / collapsed threshold. */
   onExpandChange?: (expanded: boolean) => void
+  /** Fires once the construct-on-load intro finishes (or is skipped). */
+  onIntroComplete?: () => void
 }
 
 export function createMultitool(
@@ -263,7 +266,7 @@ export function createMultitool(
   scene.add(rim)
 
   const assembly = new THREE.Group()
-  assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame
+  assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame; intro may tween this
   assembly.position.y = 0.82 // slightly lower so extended tools don't clip the top
   scene.add(assembly)
 
@@ -439,13 +442,16 @@ export function createMultitool(
   pickTargets.push(frontMesh, inlayMesh)
 
   // ---- pivot + end pins (rods) ----
+  // Position via mesh.position (not baked geo translate) so the intro can
+  // fly them in from off-screen.
   const pins: THREE.Mesh[] = []
+  const pinRestX = [PIVOT_X, -PIVOT_X]
   function makePin(x: number) {
     const geo = new THREE.CylinderGeometry(PIN_R, PIN_R, 1.2, 24)
     geo.rotateX(Math.PI / 2)
-    geo.translate(x, 0, 0)
     disposables.push(geo)
     const mesh = new THREE.Mesh(geo, boltMat)
+    mesh.position.set(x, 0, 0)
     pins.push(mesh)
     assembly.add(mesh)
   }
@@ -545,6 +551,148 @@ export function createMultitool(
   const ordered = [...explodeLayers].sort((a, b) => a.baseZ - b.baseZ)
   const M = ordered.length
   const center = (M - 1) / 2
+
+  // ---- construct-on-load intro (parts fly in from off-screen) ----
+  const REST_SCALE = 0.65
+  const INTRO_MS = 1750
+  type IntroActor = {
+    delay: number
+    span: number
+    apply: (u: number) => void
+    docked: boolean
+  }
+  const introActors: IntroActor[] = []
+
+  ordered.forEach((layer, i) => {
+    const side = i % 2 === 0 ? -1 : 1
+    const fromX = side * (8.5 + (i % 3) * 0.6)
+    const fromY = 3.2 - i * 0.4
+    const fromZ = layer.baseZ + side * 4.2
+    const fromRotY = side * 1.15
+    const fromRotX = 0.55 + (i % 2) * 0.15
+    introActors.push({
+      delay: 0.04 + i * 0.065,
+      span: 0.42,
+      docked: false,
+      apply: (u) => {
+        const e = ease(u)
+        layer.obj.position.set(lerp(fromX, 0, e), lerp(fromY, 0, e), lerp(fromZ, layer.baseZ, e))
+        layer.obj.rotation.x = lerp(fromRotX, 0, e)
+        layer.obj.rotation.y = lerp(fromRotY, 0, e)
+        layer.obj.rotation.z = lerp(side * 0.25, 0, e)
+      },
+    })
+  })
+
+  pins.forEach((pin, i) => {
+    const restX = pinRestX[i]
+    const fromX = i === 0 ? 12 : -12
+    introActors.push({
+      delay: 0.38 + i * 0.06,
+      span: 0.36,
+      docked: false,
+      apply: (u) => {
+        const e = ease(u)
+        pin.position.set(lerp(fromX, restX, e), lerp(3.4, 0, e), lerp(i === 0 ? 2 : -2, 0, e))
+        pin.rotation.y = lerp(i === 0 ? 1.2 : -1.2, 0, e)
+      },
+    })
+  })
+
+  tools.forEach((tool, i) => {
+    introActors.push({
+      delay: 0.1 + i * 0.07,
+      span: 0.48,
+      docked: false,
+      apply: (u) => {
+        // Showcase open while flying, then fold shut as the layer docks.
+        tool.pivot.rotation.z = lerp(tool.open, tool.closed, ease(u))
+        tool.hover = 0
+        tool.linerMat.emissiveIntensity = 0.06 + (1 - ease(u)) * 0.35
+      },
+    })
+  })
+
+  let introT = 0
+  let introPlaying = false
+  let introDone = false
+  let introStartedAt = 0
+  let introCompleteReported = false
+
+  function preferReducedMotion() {
+    return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  }
+
+  function finishIntro() {
+    introT = 1
+    introPlaying = false
+    introDone = true
+    for (const actor of introActors) {
+      actor.apply(1)
+      actor.docked = true
+    }
+    for (const layer of ordered) {
+      layer.obj.position.set(0, 0, layer.baseZ)
+      layer.obj.rotation.set(0, 0, 0)
+    }
+    pins.forEach((pin, i) => {
+      pin.position.set(pinRestX[i], 0, 0)
+      pin.rotation.set(0, 0, 0)
+      pin.scale.z = 1
+    })
+    for (const tool of tools) {
+      tool.pivot.rotation.z = tool.closed
+      tool.hover = 0
+      tool.linerMat.emissiveIntensity = 0.06
+    }
+    assembly.scale.setScalar(REST_SCALE)
+    if (!introCompleteReported) {
+      introCompleteReported = true
+      playToolClick()
+      options.onIntroComplete?.()
+    }
+  }
+
+  function playIntro() {
+    if (introDone || introPlaying) return
+    unlockAudio()
+    if (preferReducedMotion()) {
+      finishIntro()
+      return
+    }
+    introPlaying = true
+    introStartedAt = performance.now()
+  }
+
+  function applyIntro(now: number) {
+    if (!introPlaying && !introDone) {
+      // Parked off-screen while the bot check / warm-up runs.
+      introT = 0
+    } else if (introPlaying) {
+      introT = Math.min(1, (now - introStartedAt) / INTRO_MS)
+    }
+
+    const t = introT
+    // Whole assembly settles from a dramatic cant into frontal rest.
+    const settle = ease(Math.min(1, t * 1.15))
+    assembly.scale.setScalar(lerp(0.42, REST_SCALE, settle))
+    assembly.rotation.y = lerp(1.25, 0, settle)
+    assembly.rotation.x = lerp(0.85, 0, settle)
+    assembly.rotation.z = lerp(-0.15, 0, settle)
+
+    for (let i = 0; i < introActors.length; i++) {
+      const actor = introActors[i]
+      const local = (t - actor.delay) / actor.span
+      const u = THREE.MathUtils.clamp(local, 0, 1)
+      actor.apply(u)
+      if (!actor.docked && u >= 0.92) {
+        actor.docked = true
+        playAccordionClick(i % 6, 0)
+      }
+    }
+
+    if (introPlaying && t >= 1) finishIntro()
+  }
 
   // ---- interaction ----
   const raycaster = new THREE.Raycaster()
@@ -670,6 +818,14 @@ export function createMultitool(
 
   function applyFrame(t: number) {
     const now = performance.now()
+
+    // Construct intro (or parked off-screen warm-up) runs before interaction.
+    if (!introDone) {
+      applyIntro(now)
+      assembly.updateMatrixWorld(true)
+      return
+    }
+
     settleCommitted(now)
     const idx = activeIndex()
 
@@ -736,11 +892,16 @@ export function createMultitool(
     const mean = positions.reduce((s, v) => s + v, 0) / M
     for (let o = 0; o < M; o++) {
       const target = positions[o] - mean
-      ordered[o].obj.position.z = lerp(ordered[o].baseZ, target, a)
+      ordered[o].obj.position.set(0, 0, lerp(ordered[o].baseZ, target, a))
+      ordered[o].obj.rotation.set(0, 0, 0)
     }
 
     // Rods lengthen as the plates spread so they keep threading through the holes.
-    for (const p of pins) p.scale.z = 1 + a * 2.6
+    for (let p = 0; p < pins.length; p++) {
+      pins[p].position.set(pinRestX[p], 0, 0)
+      pins[p].rotation.set(0, 0, 0)
+      pins[p].scale.z = 1 + a * 2.6
+    }
 
     for (let i = 0; i < tools.length; i++) {
       const tool = tools[i]
@@ -784,9 +945,15 @@ export function createMultitool(
   resize()
   frame()
 
+  // Park parts off-screen immediately so the first painted frame isn't a flash
+  // of the assembled tool under the bot-check gate.
+  applyIntro(performance.now())
+
   return {
     resize,
+    playIntro,
     setActiveArea(index: number | null) {
+      if (!introDone) return
       unlockAudio()
       externalIndex = index
       if (index === null) requestIndex(-1)
