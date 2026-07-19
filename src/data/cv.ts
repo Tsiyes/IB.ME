@@ -111,7 +111,6 @@ export const areas: Area[] = [
       'Owning product direction for regulated medical software — balancing clinical needs, usability and the certification bar that healthcare devices must clear.',
     skills: [
       'Product Research',
-      'CE Marking',
       'Medical Device Certification',
       'DCB0129',
       'ISO 13485',
@@ -179,6 +178,7 @@ export const areas: Area[] = [
       'HL7 / Healthcare Interfacing',
       'Roche',
       'Leica',
+      'CE Marking',
       '3DHISTECH',
       'Illumina',
       'Thermo Fisher',

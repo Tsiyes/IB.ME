@@ -407,7 +407,7 @@ export function createMultitool(
       y: -0.14, 
       font: boldFont },
     {
-      text: sanitize('IMPLEMENTATION / PRODUCT / QA /HEALTHCARE', mediumGlyphs),
+      text: sanitize('IMPLEMENTATION / PRODUCT / QA / HEALTHCARE', mediumGlyphs),
       size: 0.092,
       y: -0.32,
       font: mediumFont,
