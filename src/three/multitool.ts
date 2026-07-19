@@ -228,6 +228,8 @@ export interface Multitool {
   dispose: () => void
   setActiveArea: (index: number | null) => void
   playIntro: () => void
+  /** Mobile showcase: hold exploded after intro; ignore hover/legend deploy. */
+  setShowcaseMode: (on: boolean) => void
 }
 
 export interface MultitoolOptions {
@@ -236,6 +238,11 @@ export interface MultitoolOptions {
   onExpandChange?: (expanded: boolean) => void
   /** Fires once the construct-on-load intro finishes (or is skipped). */
   onIntroComplete?: () => void
+  /**
+   * After intro, keep the tool exploded and ignore pointer/legend interaction.
+   * Used on mobile so the hero is a self-contained showcase.
+   */
+  showcaseMode?: boolean
 }
 
 export function createMultitool(
@@ -644,6 +651,9 @@ export function createMultitool(
   let introDone = false
   let introStartedAt = 0
   let introCompleteReported = false
+  let showcaseMode = !!options.showcaseMode
+  /** Once intro finishes in showcase mode, drive explode toward fully open. */
+  let showcaseExplode = false
 
   function preferReducedMotion() {
     return typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -672,6 +682,7 @@ export function createMultitool(
       tool.linerMat.emissiveIntensity = 0.06
     }
     assembly.scale.setScalar(REST_SCALE)
+    if (showcaseMode) showcaseExplode = true
     if (!introCompleteReported) {
       introCompleteReported = true
       playToolClick()
@@ -762,6 +773,7 @@ export function createMultitool(
   }
 
   function onMove(e: PointerEvent) {
+    if (showcaseMode) return
     unlockAudio()
     stageHover = true
     const rect = canvas.getBoundingClientRect()
@@ -778,10 +790,12 @@ export function createMultitool(
     requestIndex(typeof ai === 'number' ? ai : -1)
   }
   function onEnter() {
+    if (showcaseMode) return
     unlockAudio()
     stageHover = true
   }
   function onLeave() {
+    if (showcaseMode) return
     stageHover = false
     requestIndex(-1)
     parallaxTarget.set(0, 0)
@@ -853,7 +867,7 @@ export function createMultitool(
     }
 
     settleCommitted(now)
-    const idx = activeIndex()
+    const idx = showcaseMode ? -1 : activeIndex()
 
     parallax.lerp(parallaxTarget, 0.06)
 
@@ -862,7 +876,10 @@ export function createMultitool(
     const cdx = (pointer.x - tmp.x) * camera.aspect
     const cdy = pointer.y - tmp.y
     const near = Math.sqrt(cdx * cdx + cdy * cdy) < PROXIMITY
-    const wantExplode = (stageHover && near) || externalIndex !== null
+    // Showcase (mobile): hold exploded after intro — no hover journey.
+    const wantExplode = showcaseMode
+      ? showcaseExplode
+      : (stageHover && near) || externalIndex !== null
     explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
     const a = ease(explodeScalar)
 
@@ -874,9 +891,12 @@ export function createMultitool(
     }
 
     // Full-frontal at rest; cants open with the explode so coloured liners
-    // present toward the camera. Light cursor parallax is always allowed.
-    assembly.rotation.y = 0.92 * a + parallax.x * 0.14 + 0.03 * a * Math.sin(t * 0.3)
-    assembly.rotation.x = 0.48 * a - parallax.y * 0.1 + 0.015 * a * Math.sin(t * 0.35)
+    // present toward the camera. Light cursor parallax is always allowed
+    // (showcase keeps a gentle idle sway instead of pointer parallax).
+    const px = showcaseMode ? 0.08 * Math.sin(t * 0.35) : parallax.x * 0.14
+    const py = showcaseMode ? 0.04 * Math.sin(t * 0.28) : parallax.y * 0.1
+    assembly.rotation.y = 0.92 * a + px + 0.03 * a * Math.sin(t * 0.3)
+    assembly.rotation.x = 0.48 * a - py + 0.015 * a * Math.sin(t * 0.35)
     assembly.rotation.z = 0
     assembly.updateMatrixWorld(true)
 
@@ -894,17 +914,21 @@ export function createMultitool(
     }
 
     // Focus: which layer is nearest the pointer (drives the accordion).
-    let fw = 0
-    let fwsum = 0
-    for (let o = 0; o < M; o++) {
-      ordered[o].obj.getWorldPosition(tmp).project(camera)
-      const dx = (pointer.x - tmp.x) * camera.aspect
-      const dy = pointer.y - tmp.y
-      const w = 1 / (dx * dx + dy * dy + 0.05)
-      fw += o * w
-      fwsum += w
+    // Showcase uses a fixed mid focus so the fan reads evenly.
+    let focus = center
+    if (!showcaseMode) {
+      let fw = 0
+      let fwsum = 0
+      for (let o = 0; o < M; o++) {
+        ordered[o].obj.getWorldPosition(tmp).project(camera)
+        const dx = (pointer.x - tmp.x) * camera.aspect
+        const dy = pointer.y - tmp.y
+        const w = 1 / (dx * dx + dy * dy + 0.05)
+        fw += o * w
+        fwsum += w
+      }
+      focus = fwsum > 0 ? fw / fwsum : center
     }
-    const focus = fwsum > 0 ? fw / fwsum : center
 
     // Accordion positions: cumulative gaps, larger near the focus.
     let pos = 0
@@ -978,8 +1002,24 @@ export function createMultitool(
   return {
     resize,
     playIntro,
+    setShowcaseMode(on: boolean) {
+      showcaseMode = on
+      if (on) {
+        stageHover = false
+        requestIndex(-1)
+        externalIndex = null
+        committedIndex = -1
+        pendingIndex = -1
+        desiredIndex = -1
+        parallaxTarget.set(0, 0)
+        report()
+        if (introDone) showcaseExplode = true
+      } else {
+        showcaseExplode = false
+      }
+    },
     setActiveArea(index: number | null) {
-      if (!introDone) return
+      if (!introDone || showcaseMode) return
       unlockAudio()
       externalIndex = index
       if (index === null) requestIndex(-1)
