@@ -10,6 +10,8 @@
       rel="stylesheet"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Hint only — GitHub Pages still applies its own Cache-Control on HTML. -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta
       name="description"
       content="Isaac Bristow — CV as an interactive 3D multi-tool. Scroll to deploy each tool across Development, Product, Management and Healthcare Sciences."
@@ -19,5 +21,63 @@
   <body>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <!--
+      GitHub Pages caches index.html (~10 min). After a redeploy the hashed JS
+      filename changes, so a cached HTML shell 404s the old bundle. This inline
+      check (must stay out of the hashed JS) probes a fresh index and reloads
+      once if the entry script moved — no hard refresh required.
+    -->
+    <script>
+      (() => {
+        const FLAG = 'mtcv-html-bust'
+        const params = new URLSearchParams(location.search)
+        if (params.has('_r')) {
+          params.delete('_r')
+          const q = params.toString()
+          history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash)
+          try {
+            sessionStorage.removeItem(FLAG)
+          } catch {
+            /* ignore */
+          }
+          return
+        }
+
+        const entry = document.querySelector('script[type="module"][src]')
+        const localSrc = entry?.getAttribute('src') || ''
+        // Vite dev serves /src/main.ts — nothing to reconcile.
+        if (!localSrc || localSrc.includes('/src/')) return
+
+        try {
+          if (sessionStorage.getItem(FLAG)) {
+            sessionStorage.removeItem(FLAG)
+            return
+          }
+        } catch {
+          /* ignore */
+        }
+
+        const probe = new URL(location.href)
+        probe.hash = ''
+        probe.search = ''
+        probe.searchParams.set('_', String(Date.now()))
+
+        fetch(probe.toString(), { cache: 'no-store', headers: { Pragma: 'no-cache' } })
+          .then((r) => (r.ok ? r.text() : Promise.reject()))
+          .then((html) => {
+            const match = html.match(/assets\/index-[^"'\\s]+\.js/)
+            if (!match || localSrc.includes(match[0])) return
+            try {
+              sessionStorage.setItem(FLAG, '1')
+            } catch {
+              /* ignore */
+            }
+            const next = new URL(location.href)
+            next.searchParams.set('_r', String(Date.now()))
+            location.replace(next.toString())
+          })
+          .catch(() => {})
+      })()
+    </script>
   </body>
 </html>
