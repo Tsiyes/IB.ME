@@ -1,8 +1,9 @@
 # Free static hosting on GitHub Pages.
 #
-# This builds the Vite app and publishes ./dist to GitHub Pages on every push
-# to main. To enable: repo Settings → Pages → Build and deployment → Source =
-# "GitHub Actions".
+# Publishes ./dist on every push to main. REQUIRED: repo Settings → Pages →
+# Build and deployment → Source = "GitHub Actions".
+# If Source is "Deploy from a branch" (main /), GitHub will serve the raw Vue
+# source index.html instead of this artifact — the site breaks.
 #
 # BASE_PATH is set to the repo name for project pages (https://<user>.github.io/<repo>/).
 # If you attach a custom domain (see CNAME note in README), remove BASE_PATH so
@@ -28,12 +29,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build
+      - name: Lint
+        run: npm run lint
+      - name: Build + smoke
         run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
