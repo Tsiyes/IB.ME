@@ -28,6 +28,22 @@ function loadEngraveFonts(): Promise<EngraveFonts> {
   return engraveFontsPromise
 }
 
+/** Kick off font fetch/parse early without building the full scene. */
+export function preloadEngraveFonts(): Promise<EngraveFonts> {
+  return loadEngraveFonts()
+}
+
+/** Let the browser process input/paint between heavy sync chunks. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => resolve(), { timeout: 48 })
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+}
+
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
 //
@@ -260,6 +276,8 @@ export async function createMultitool(
   options: MultitoolOptions = {},
 ): Promise<Multitool> {
   const { bold: boldFont, medium: mediumFont } = await loadEngraveFonts()
+  // Fonts may have parsed on the main thread — breathe before WebGL/CSG work.
+  await yieldToMain()
 
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
@@ -291,6 +309,8 @@ export async function createMultitool(
   assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame; intro may tween this
   assembly.position.y = 0.82 // slightly lower so extended tools don't clip the top
   scene.add(assembly)
+
+  await yieldToMain()
 
   const disposables: Array<{ dispose: () => void }> = []
   const explodeLayers: ExplodeLayer[] = []
@@ -429,6 +449,9 @@ export async function createMultitool(
   const cutterGeo = mergeGeometries(cutterGeos, false)!
   cutterGeos.forEach((g) => g.dispose())
 
+  // CSG is the expensive sync spike — yield so the bot-check UI can stay responsive.
+  await yieldToMain()
+
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
   // (un-engraved) cover so the scene still renders.
   let frontMesh: THREE.Mesh
@@ -448,6 +471,8 @@ export async function createMultitool(
   frontGeo.dispose()
   cutterGeo.dispose()
   disposables.push(frontMesh.geometry)
+
+  await yieldToMain()
 
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52
