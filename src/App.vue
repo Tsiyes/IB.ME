@@ -66,7 +66,8 @@ function onLegendActivate(areaId: string, index: number) {
     <BotCheck v-if="!unlocked" @passed="onUnlocked" />
   </Transition>
 
-  <!-- Scene mounts immediately (under the gate) so WebGL warms during the check. -->
+  <!-- Canvas mounts under the gate; heavy WebGL/CSG warm is deferred to idle
+       so the human check stays responsive, then prioritised on unlock. -->
   <section class="hero" :aria-hidden="!heroLive || undefined" :inert="!heroLive || undefined">
     <ToolScene
       :force-area="forceArea"

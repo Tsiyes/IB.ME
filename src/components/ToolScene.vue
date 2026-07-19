@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { createMultitool, type Multitool } from '../three/multitool'
+import { createMultitool, preloadEngraveFonts, type Multitool } from '../three/multitool'
 
 const props = defineProps<{
   forceArea?: number | null
@@ -17,9 +17,25 @@ const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
 let observer: ResizeObserver | null = null
 let disposed = false
+let building = false
+let idleHandle: number | null = null
+let warmTimer: ReturnType<typeof setTimeout> | null = null
 
-onMounted(() => {
-  if (!canvas.value) return
+function clearWarmSchedule() {
+  if (idleHandle !== null && typeof cancelIdleCallback === 'function') {
+    cancelIdleCallback(idleHandle)
+    idleHandle = null
+  }
+  if (warmTimer !== null) {
+    clearTimeout(warmTimer)
+    warmTimer = null
+  }
+}
+
+function beginBuild() {
+  if (disposed || building || tool || !canvas.value) return
+  building = true
+  clearWarmSchedule()
   const el = canvas.value
   void createMultitool(el, {
     onAreaChange: (id) => emit('area-change', id),
@@ -35,6 +51,36 @@ onMounted(() => {
     if (el.parentElement) observer.observe(el.parentElement)
     if (props.runIntro) tool.playIntro()
   })
+}
+
+/** Warm during idle so the bot-check gate stays clickable on first paint. */
+function scheduleWarm() {
+  if (disposed || building || tool) return
+  // Minimum delay: let the gate paint and accept the first pointer events.
+  warmTimer = setTimeout(() => {
+    warmTimer = null
+    if (disposed || building || tool) return
+    if (typeof requestIdleCallback === 'function') {
+      idleHandle = requestIdleCallback(() => {
+        idleHandle = null
+        beginBuild()
+      }, { timeout: 1800 })
+    } else {
+      beginBuild()
+    }
+  }, 280)
+}
+
+onMounted(() => {
+  if (!canvas.value) return
+  // Fonts only — cheap compared to CSG; still deferred a tick to not contend
+  // with BotCheck's first interactive frame.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      void preloadEngraveFonts()
+      scheduleWarm()
+    })
+  })
 })
 
 watch(
@@ -45,12 +91,16 @@ watch(
 watch(
   () => props.runIntro,
   (v) => {
-    if (v) tool?.playIntro()
+    if (!v) return
+    // Unlock wins over idle warm — start immediately if still pending.
+    if (!tool) beginBuild()
+    else tool.playIntro()
   },
 )
 
 onBeforeUnmount(() => {
   disposed = true
+  clearWarmSchedule()
   observer?.disconnect()
   tool?.dispose()
   tool = null
