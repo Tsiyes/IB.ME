@@ -318,23 +318,19 @@ export function createMultitool(
   const back = makeScale(-0.52)
   pickTargets.push(back.mesh)
 
-  // ---- front cover with identity CUT INTO it, then filled with enamel ----
-  // CSG only excavates the pocket (metal cavity walls). A separate, slightly
-  // shallower glyph mesh sits in that pocket as the white enamel inlay — so
-  // increasing RECESS deepens a real filled recess rather than hollow white walls.
+  // ---- front cover with identity CUT INTO it (dark recessed engraving) ----
+  // CSG excavates a real pocket; cut faces use a dark "ink" material so the
+  // side walls and floor read as depth rather than a flush enamel fill.
   // Static, and kept clear of the bored rod holes at ±PIVOT_X.
-  const inlayMat = new THREE.MeshPhysicalMaterial({
-    color: 0xf3f1ec,
-    metalness: 0.08,
-    roughness: 0.42,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.12,
-    envMapIntensity: 0.85,
+  const inkMat = new THREE.MeshStandardMaterial({
+    color: 0x0a0d12,
+    metalness: 0.22,
+    roughness: 0.92,
+    envMapIntensity: 0.28,
   })
-  disposables.push(inlayMat)
-  const RECESS = 0.1
-  // Leave a hair of metal lip so the inlay reads as seated in the pocket.
-  const INLAY_CLEARANCE = 0.006
+  disposables.push(inkMat)
+  // Deep enough that the cavity walls catch light; SCALE_D is 0.14 so stay under that.
+  const RECESS = 0.09
 
   const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
   const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
@@ -360,7 +356,6 @@ export function createMultitool(
   // guaranteed to open at the surface and recess RECESS deep.
   const surfaceZ = frontGeo.boundingBox!.max.z
   const cutterDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
-  const fillDepth = Math.max(RECESS - INLAY_CLEARANCE, 0.004)
 
   const lines: Array<{ text: string; size: number; y: number }> = [
     { text: sanitize(profile.name), size: 0.28, y: 0.1 },
@@ -376,8 +371,12 @@ export function createMultitool(
         font,
         size: line.size,
         depth,
-        curveSegments: 4,
-        bevelEnabled: false,
+        curveSegments: 5,
+        // Tiny bevel softens the cavity lip so the recess reads as engraved, not laser-cut.
+        bevelEnabled: true,
+        bevelThickness: 0.012,
+        bevelSize: 0.01,
+        bevelSegments: 2,
       })
       geo.computeBoundingBox()
       const bb = geo.boundingBox!
@@ -405,22 +404,17 @@ export function createMultitool(
   const cutterGeo = mergeGeometries(cutterGeos, false)!
   cutterGeos.forEach((g) => g.dispose())
 
-  const fillGeos = layoutTextGeos(fillDepth, surfaceZ - RECESS)
-  centreBlockY(fillGeos)
-  const fillGeo = mergeGeometries(fillGeos, false)!
-  fillGeos.forEach((g) => g.dispose())
-
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
-  // cover with the enamel glyphs still present so the scene still renders.
+  // (un-engraved) cover so the scene still renders.
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    const textBrush = new Brush(mergeVertices(cutterGeo), scaleMat)
+    const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    // Both groups stay metal — the pocket walls are the scale, not the enamel.
-    result.material = [scaleMat, scaleMat]
+    // Group 0 = metal scale; group 1 = dark inked cavity walls/floor.
+    result.material = [scaleMat, inkMat]
     frontMesh = result
   } catch (err) {
     console.warn('[multitool] engraving CSG failed, using plain cover', err)
@@ -430,16 +424,12 @@ export function createMultitool(
   cutterGeo.dispose()
   disposables.push(frontMesh.geometry)
 
-  const inlayMesh = new THREE.Mesh(fillGeo, inlayMat)
-  disposables.push(fillGeo)
-
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52
   frontGroup.add(frontMesh)
-  frontGroup.add(inlayMesh)
   assembly.add(frontGroup)
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
-  pickTargets.push(frontMesh, inlayMesh)
+  pickTargets.push(frontMesh)
 
   // ---- pivot + end pins (rods) ----
   // Position via mesh.position (not baked geo translate) so the intro can
