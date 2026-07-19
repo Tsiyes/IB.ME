@@ -245,11 +245,13 @@ export function createMultitool(
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
-  renderer.toneMappingExposure = 1.12
+  // Slightly lower exposure so raking keys can keep contrast on the frontal face.
+  renderer.toneMappingExposure = 1.05
 
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.02).texture
+  // Tighter blur → sharper env reflections on polymer bevels / clearcoat.
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.015).texture
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
   // Frame the tool in the upper-centre of the hero; look slightly below it so
@@ -257,16 +259,34 @@ export function createMultitool(
   camera.position.set(0.55, 0.75, 12)
   camera.lookAt(0, 0.05, 0)
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.45))
-  const key = new THREE.DirectionalLight(0xffffff, 2.5)
-  key.position.set(4, 8, 7)
+  // Rest view is full-frontal — flat ambient washed the face. Use a soft
+  // sky/ground gradient plus raking keys so bevels and the engraved recess read.
+  scene.add(new THREE.HemisphereLight(0xf4f7ff, 0x9aa3b0, 0.5))
+
+  // Warm key from camera-right / high — main shape light, not head-on.
+  const key = new THREE.DirectionalLight(0xfff4e8, 2.05)
+  key.position.set(7.2, 5.8, 2.8)
   scene.add(key)
-  const fill = new THREE.DirectionalLight(0xcfe0ff, 0.9)
-  fill.position.set(-6, 2, 5)
+
+  // Cool fill from the opposite side — keeps shadows soft but present.
+  const fill = new THREE.DirectionalLight(0xc9dcff, 0.5)
+  fill.position.set(-6.8, 1.4, 4.2)
   scene.add(fill)
-  const rim = new THREE.DirectionalLight(0xffffff, 1.5)
-  rim.position.set(-3, -5, -7)
+
+  // Skim nearly in the face plane — grazes polymer + lettering for micro-relief.
+  const skim = new THREE.DirectionalLight(0xffffff, 0.9)
+  skim.position.set(-1.8, 9.2, 1.1)
+  scene.add(skim)
+
+  // Rim from behind — edge separation when exploded; slight catch on pin heads.
+  const rim = new THREE.DirectionalLight(0xe8f0ff, 1.25)
+  rim.position.set(-4.2, 1.8, -7.5)
   scene.add(rim)
+
+  // Soft bounce from below so underside faces aren't dead when the stack cants.
+  const bounce = new THREE.DirectionalLight(0xfff1e6, 0.32)
+  bounce.position.set(1.2, -6.5, 3.5)
+  scene.add(bounce)
 
   const assembly = new THREE.Group()
   assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame; intro may tween this
@@ -278,17 +298,18 @@ export function createMultitool(
   const pickTargets: THREE.Object3D[] = []
   const tools: ToolNode[] = []
 
-  // Polymer scales — match the ABOUT ME blurb top rule (#3b82f6); rods stay steel.
+  // Polymer scales — colour left for the owner to tune; rods stay steel.
+  // Clearcoat + env nudged so the new raking rig can shape the frontal face.
   const scaleMat = new THREE.MeshPhysicalMaterial({
     color: 0x3b82f6,
     metalness: 0.06,
-    roughness: 0.52,
-    clearcoat: 0.45,
-    clearcoatRoughness: 0.4,
-    sheen: 0.2,
-    sheenRoughness: 0.65,
+    roughness: 0.48,
+    clearcoat: 0.55,
+    clearcoatRoughness: 0.28,
+    sheen: 0.22,
+    sheenRoughness: 0.6,
     sheenColor: new THREE.Color(0x93c5fd),
-    envMapIntensity: 0.45,
+    envMapIntensity: 0.72,
   })
   const boltMat = new THREE.MeshPhysicalMaterial({
     color: 0x9aa2ad,
