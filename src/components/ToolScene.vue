@@ -16,19 +16,25 @@ const emit = defineEmits<{
 const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
 let observer: ResizeObserver | null = null
+let disposed = false
 
 onMounted(() => {
   if (!canvas.value) return
-  tool = createMultitool(canvas.value, {
+  const el = canvas.value
+  void createMultitool(el, {
     onAreaChange: (id) => emit('area-change', id),
     onExpandChange: (expanded) => emit('expand-change', expanded),
     onIntroComplete: () => emit('intro-complete'),
+  }).then((instance) => {
+    if (disposed) {
+      instance.dispose()
+      return
+    }
+    tool = instance
+    observer = new ResizeObserver(() => tool?.resize())
+    if (el.parentElement) observer.observe(el.parentElement)
+    if (props.runIntro) tool.playIntro()
   })
-
-  observer = new ResizeObserver(() => tool?.resize())
-  if (canvas.value.parentElement) observer.observe(canvas.value.parentElement)
-
-  if (props.runIntro) tool.playIntro()
 })
 
 watch(
@@ -44,6 +50,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  disposed = true
   observer?.disconnect()
   tool?.dispose()
   tool = null
