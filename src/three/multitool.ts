@@ -278,16 +278,16 @@ export function createMultitool(
   const pickTargets: THREE.Object3D[] = []
   const tools: ToolNode[] = []
 
-  // Polymer scales — matte body with soft clearcoat (rods stay steel below).
+  // Polymer scales — match the ABOUT ME blurb top rule (#3b82f6); rods stay steel.
   const scaleMat = new THREE.MeshPhysicalMaterial({
-    color: 0x5c636c,
+    color: 0x3b82f6,
     metalness: 0.06,
     roughness: 0.52,
     clearcoat: 0.45,
     clearcoatRoughness: 0.4,
     sheen: 0.2,
     sheenRoughness: 0.65,
-    sheenColor: new THREE.Color(0x8b929a),
+    sheenColor: new THREE.Color(0x93c5fd),
     envMapIntensity: 0.45,
   })
   const boltMat = new THREE.MeshPhysicalMaterial({
