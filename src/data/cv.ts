@@ -51,7 +51,7 @@ export interface Credential {
 
 export const profile = {
   name: 'Isaac Bristow',
-  creds: 'BSc [Hons]',
+  creds: 'BSc HONS',
   title: 'Implementation · Product · QA · Healthcare',
   statement:
     'Resilient, self-directed, pressure-motivated. Preference for high-intensity, high-reward environments. Individually, I find satisfaction delivering creative solutions via a diverse and expanding toolset; collaboratively, multi-disciplinary co-ordination and radical candour drive success in the projects I lead and contribute to.',
