@@ -3,7 +3,9 @@
 //
 // The multi-tool is segmented into four specialist `areas`; each maps to one
 // tool that extrudes when its segment is hovered (see src/three/multitool.ts).
-// `accent` colours the segment's synthetic material and its UI highlights.
+// `accent` colours the segment's synthetic liner and its UI highlights.
+// Tuned against the indigo polymer scales (#4d48fc) and peach engraving (#fdcb93):
+// warm coral + gold/rose kin to the ink, with a teal complement for Product.
 // -----------------------------------------------------------------------------
 
 export type ToolKind = 'driver' | 'wrench' | 'ruler' | 'scalpel'
@@ -129,7 +131,7 @@ export const areas: Area[] = [
         detail: 'Product decisions framed against DCB0129 and ISO 13485 from the outset.',
       },
     ],
-    accent: '#10b981',
+    accent: '#2f9e8f',
   },
   {
     id: 'management',
@@ -159,7 +161,7 @@ export const areas: Area[] = [
         detail: 'Direct, high-trust communication that keeps multi-disciplinary teams aligned.',
       },
     ],
-    accent: '#f59e0b',
+    accent: '#e0a85c',
   },
   {
     id: 'healthcare',
@@ -197,7 +199,7 @@ export const areas: Area[] = [
         detail: 'GIRFT reward nomination for a novel thermocycler contamination monitor.',
       },
     ],
-    accent: '#ec4899',
+    accent: '#c96b8c',
   },
 ]
 
