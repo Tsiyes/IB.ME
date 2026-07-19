@@ -3,7 +3,10 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { createMultitool, type Multitool } from '../three/multitool'
 
 const props = defineProps<{ forceArea?: number | null }>()
-const emit = defineEmits<{ (e: 'area-change', id: string | null): void }>()
+const emit = defineEmits<{
+  (e: 'area-change', id: string | null): void
+  (e: 'expand-change', expanded: boolean): void
+}>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
@@ -13,6 +16,7 @@ onMounted(() => {
   if (!canvas.value) return
   tool = createMultitool(canvas.value, {
     onAreaChange: (id) => emit('area-change', id),
+    onExpandChange: (expanded) => emit('expand-change', expanded),
   })
 
   observer = new ResizeObserver(() => tool?.resize())

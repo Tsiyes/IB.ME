@@ -228,6 +228,8 @@ export interface Multitool {
 
 export interface MultitoolOptions {
   onAreaChange?: (id: string | null) => void
+  /** Fires when the accordion crosses the expanded / collapsed threshold. */
+  onExpandChange?: (expanded: boolean) => void
 }
 
 export function createMultitool(
@@ -562,10 +564,13 @@ export function createMultitool(
   let explodeScalar = 0
   let lastAccordionStep = -1
   let armedToolClick = false
+  let reportedExpanded = false
 
   const HOVER_DELAY_MS = 105 // was 140; ~25% snappier dwell before commit
   const DEPLOY_COOLDOWN_MS = 240 // was 320; matching 25% reduction
   const ACCORDION_CLICK_STEPS = Math.max(4, M - 1)
+  const EXPAND_ON = 0.22
+  const EXPAND_OFF = 0.1
 
   const activeIndex = () => (externalIndex !== null ? externalIndex : committedIndex)
 
@@ -678,6 +683,13 @@ export function createMultitool(
     const wantExplode = (stageHover && near) || externalIndex !== null
     explodeScalar += ((wantExplode ? 1 : 0) - explodeScalar) * 0.06
     const a = ease(explodeScalar)
+
+    // Hysteresis so the ABOUT ME panel doesn't flicker at the proximity edge.
+    const nextExpanded = reportedExpanded ? a > EXPAND_OFF : a > EXPAND_ON
+    if (nextExpanded !== reportedExpanded) {
+      reportedExpanded = nextExpanded
+      options.onExpandChange?.(reportedExpanded)
+    }
 
     // Full-frontal at rest; cants open with the explode so coloured liners
     // present toward the camera. Light cursor parallax is always allowed.

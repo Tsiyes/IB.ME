@@ -6,12 +6,14 @@ import { accolades, areas, contact, education, experience, profile } from './dat
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const unlocked = ref(false)
+const expanded = ref(false)
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
 
 const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
+const showBlurb = computed(() => !!activeArea.value || !expanded.value)
 
 watch(
   unlocked,
@@ -35,6 +37,9 @@ function onUnlocked() {
 function onAreaChange(id: string | null) {
   activeId.value = id
 }
+function onExpandChange(isExpanded: boolean) {
+  expanded.value = isExpanded
+}
 function hoverLegend(index: number | null) {
   forceArea.value = index
 }
@@ -54,14 +59,20 @@ function onLegendActivate(areaId: string, index: number) {
   </Transition>
 
   <section class="hero" :aria-hidden="!unlocked || undefined" :inert="!unlocked || undefined">
-    <ToolScene v-if="unlocked" :force-area="forceArea" @area-change="onAreaChange" />
+    <ToolScene
+      v-if="unlocked"
+      :force-area="forceArea"
+      @area-change="onAreaChange"
+      @expand-change="onExpandChange"
+    />
 
     <!-- Identity is engraved on the tool's face plate; this heading is for
          accessibility / SEO only. -->
     <h1 class="sr-only">{{ profile.name }} — {{ profile.title }}</h1>
 
     <div
-      class="blurb-panel on"
+      class="blurb-panel"
+      :class="{ on: showBlurb }"
       :style="activeArea ? { '--accent': activeArea.accent } : {}"
     >
       <Transition name="swap" mode="out-in">
@@ -69,7 +80,7 @@ function onLegendActivate(areaId: string, index: number) {
           <p class="panel-title">{{ activeArea.label }}</p>
           <p class="blurb">{{ activeArea.blurb }}</p>
         </div>
-        <div v-else key="idle">
+        <div v-else-if="!expanded" key="idle">
           <p class="panel-title">ABOUT ME</p>
           <p class="blurb">{{ profile.statement }}</p>
         </div>
