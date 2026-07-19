@@ -296,7 +296,12 @@ export function createMultitool(
   scene.add(bounce)
 
   const assembly = new THREE.Group()
-  assembly.scale.setScalar(0.65) // keep deployed tools inside the hero frame; intro may tween this
+  // Desktop rest scale; mobile showcase is 25% smaller so the exploded fan fits.
+  const DESKTOP_SCALE = 0.65
+  const MOBILE_SCALE = DESKTOP_SCALE * 0.75
+  let showcaseMode = !!options.showcaseMode
+  const restScale = () => (showcaseMode ? MOBILE_SCALE : DESKTOP_SCALE)
+  assembly.scale.setScalar(restScale()) // intro may tween this
   assembly.position.y = 0.82 // slightly lower so extended tools don't clip the top
   scene.add(assembly)
 
@@ -593,8 +598,8 @@ export function createMultitool(
   const center = (M - 1) / 2
 
   // ---- construct-on-load intro (parts fly in from off-screen) ----
-  const REST_SCALE = 0.65
   const INTRO_MS = 1750
+  const INTRO_START_RATIO = 0.42 / DESKTOP_SCALE // keep intro grow-in proportional to rest scale
   type IntroActor = {
     delay: number
     span: number
@@ -658,7 +663,6 @@ export function createMultitool(
   let introDone = false
   let introStartedAt = 0
   let introCompleteReported = false
-  let showcaseMode = !!options.showcaseMode
   /** Once intro finishes in showcase mode, drive explode toward fully open. */
   let showcaseExplode = false
 
@@ -688,7 +692,7 @@ export function createMultitool(
       tool.hover = 0
       tool.linerMat.emissiveIntensity = 0.06
     }
-    assembly.scale.setScalar(REST_SCALE)
+    assembly.scale.setScalar(restScale())
     if (showcaseMode) showcaseExplode = true
     if (!introCompleteReported) {
       introCompleteReported = true
@@ -719,7 +723,8 @@ export function createMultitool(
     const t = introT
     // Whole assembly settles from a dramatic cant into frontal rest.
     const settle = ease(Math.min(1, t * 1.15))
-    assembly.scale.setScalar(lerp(0.42, REST_SCALE, settle))
+    const target = restScale()
+    assembly.scale.setScalar(lerp(target * INTRO_START_RATIO, target, settle))
     assembly.rotation.y = lerp(1.25, 0, settle)
     assembly.rotation.x = lerp(0.85, 0, settle)
     assembly.rotation.z = lerp(-0.15, 0, settle)
@@ -1024,6 +1029,8 @@ export function createMultitool(
       } else {
         showcaseExplode = false
       }
+      // Apply mobile/desktop rest scale immediately when the viewport mode flips.
+      if (introDone || !introPlaying) assembly.scale.setScalar(restScale())
     },
     setActiveArea(index: number | null) {
       if (!introDone || showcaseMode) return
