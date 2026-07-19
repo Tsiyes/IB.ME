@@ -42,7 +42,8 @@ control how its implement is drawn and how it deploys in 3D.
   output `dist`. Keep the default `base: '/'`.
 - **GitHub Pages** — workflow at [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml);
   enable Settings → Pages → Source = "GitHub Actions" (it sets `BASE_PATH` for
-  project pages automatically).
+  project pages automatically). An inline boot check in `index.html` reloads once
+  if a cached HTML shell points at a superseded hashed JS bundle after redeploy.
 
 ### Custom domain
 
