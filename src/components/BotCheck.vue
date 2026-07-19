@@ -114,12 +114,10 @@ function pick(area: Area) {
   <div class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-inner" :class="{ shake }">
       <p class="eyebrow mono">Human check</p>
-      <h2 id="gate-title">Deploy the {{ target.toolName }}</h2>
-      <p class="prompt">
-        Quick tool ID — pick the implement for
-        <strong :style="{ color: target.accent }">{{ target.label }}</strong>
-        to open the CV.
-      </p>
+      <h2 id="gate-title">
+        Deploy the
+        <span class="tool-name" :style="{ color: target.accent }">{{ target.toolName }}</span>
+      </h2>
 
       <div class="choices" role="group" aria-label="Tool choices">
         <button
@@ -205,18 +203,14 @@ function pick(area: Area) {
 }
 
 h2 {
-  margin: 0 0 12px;
+  margin: 0 0 28px;
   font-size: clamp(1.35rem, 3.5vw, 1.85rem);
   letter-spacing: -0.02em;
   font-weight: 700;
 }
 
-.prompt {
-  margin: 0 auto 28px;
-  max-width: 38ch;
-  color: var(--ink-soft);
-  font-size: 0.92rem;
-  line-height: 1.55;
+.tool-name {
+  font-weight: 700;
 }
 
 .choices {
