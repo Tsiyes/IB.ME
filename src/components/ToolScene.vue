@@ -6,6 +6,11 @@ const props = defineProps<{
   forceArea?: number | null
   /** When true, kick off the construct-on-load intro (scene may already be warm). */
   runIntro?: boolean
+  /**
+   * Mobile: after intro, hold exploded and ignore hover/legend deploy so the
+   * hero is a self-contained showcase.
+   */
+  showcaseMode?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'area-change', id: string | null): void
@@ -20,6 +25,7 @@ let observer: ResizeObserver | null = null
 onMounted(() => {
   if (!canvas.value) return
   tool = createMultitool(canvas.value, {
+    showcaseMode: props.showcaseMode,
     onAreaChange: (id) => emit('area-change', id),
     onExpandChange: (expanded) => emit('expand-change', expanded),
     onIntroComplete: () => emit('intro-complete'),
@@ -41,6 +47,11 @@ watch(
   (v) => {
     if (v) tool?.playIntro()
   },
+)
+
+watch(
+  () => props.showcaseMode,
+  (v) => tool?.setShowcaseMode(!!v),
 )
 
 onBeforeUnmount(() => {

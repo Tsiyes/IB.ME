@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BotCheck from './components/BotCheck.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
+
+const MOBILE_MQ = '(max-width: 820px)'
 
 const unlocked = ref(false)
 const introDone = ref(false)
@@ -12,13 +14,37 @@ const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
+const isMobile = ref(
+  typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches,
+)
 
 const activeArea = computed(() => areas.find((a) => a.id === activeId.value) ?? null)
-// ABOUT ME waits for the construct intro; hides again while the tool is expanded.
-const showBlurb = computed(
-  () => !!activeArea.value || (introDone.value && !expanded.value),
-)
+// Desktop: ABOUT ME waits for the construct intro; hides while expanded.
+// Mobile: ABOUT ME lives in the document below the hero (not overlaid).
+const showBlurb = computed(() => {
+  if (isMobile.value) return !!activeArea.value
+  return !!activeArea.value || (introDone.value && !expanded.value)
+})
 const heroLive = computed(() => unlocked.value && introDone.value)
+
+let mobileMq: MediaQueryList | null = null
+function syncMobile() {
+  isMobile.value = !!mobileMq?.matches
+}
+
+onMounted(() => {
+  mobileMq = window.matchMedia(MOBILE_MQ)
+  syncMobile()
+  mobileMq.addEventListener('change', syncMobile)
+})
+onBeforeUnmount(() => {
+  mobileMq?.removeEventListener('change', syncMobile)
+})
+
+watch(isMobile, (mobile) => {
+  // Drop any forced legend hover when entering showcase mode.
+  if (mobile) forceArea.value = null
+})
 
 watch(
   unlocked,
@@ -49,15 +75,23 @@ function onIntroComplete() {
   introDone.value = true
 }
 function hoverLegend(index: number | null) {
+  if (isMobile.value) return
   forceArea.value = index
 }
 function scrollToSpecialisms(areaId?: string) {
   const el = document.getElementById(areaId ? `area-${areaId}` : 'specialisms')
   el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
+function scrollToAbout() {
+  document.getElementById('about')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 function onLegendActivate(areaId: string, index: number) {
-  forceArea.value = index
+  if (!isMobile.value) forceArea.value = index
   scrollToSpecialisms(areaId)
+}
+function onScrollCue() {
+  if (isMobile.value) scrollToAbout()
+  else scrollToSpecialisms()
 }
 </script>
 
@@ -67,10 +101,16 @@ function onLegendActivate(areaId: string, index: number) {
   </Transition>
 
   <!-- Scene mounts immediately (under the gate) so WebGL warms during the check. -->
-  <section class="hero" :aria-hidden="!heroLive || undefined" :inert="!heroLive || undefined">
+  <section
+    class="hero"
+    :class="{ showcase: isMobile }"
+    :aria-hidden="!heroLive || undefined"
+    :inert="!heroLive || undefined"
+  >
     <ToolScene
       :force-area="forceArea"
       :run-intro="unlocked"
+      :showcase-mode="isMobile"
       @area-change="onAreaChange"
       @expand-change="onExpandChange"
       @intro-complete="onIntroComplete"
@@ -90,15 +130,20 @@ function onLegendActivate(areaId: string, index: number) {
           <p class="panel-title">{{ activeArea.label }}</p>
           <p class="blurb">{{ activeArea.blurb }}</p>
         </div>
-        <div v-else-if="introDone && !expanded" key="idle">
+        <div v-else-if="introDone && !expanded && !isMobile" key="idle">
           <p class="panel-title">ABOUT ME</p>
           <p class="blurb">{{ profile.statement }}</p>
         </div>
       </Transition>
     </div>
 
-    <!-- Accessible legend that also drives the 3D scene -->
-    <nav class="legend" :class="{ on: introDone }" aria-label="Specialist areas">
+    <!-- Desktop hover journey legend — omitted on mobile showcase. -->
+    <nav
+      v-if="!isMobile"
+      class="legend"
+      :class="{ on: introDone }"
+      aria-label="Specialist areas"
+    >
       <button
         v-for="(area, i) in areas"
         :key="area.id"
@@ -121,14 +166,19 @@ function onLegendActivate(areaId: string, index: number) {
       type="button"
       class="scroll-cue"
       :class="{ on: introDone }"
-      @click="scrollToSpecialisms()"
+      @click="onScrollCue"
     >
-      <span class="mono">Specialisms</span>
+      <span class="mono">{{ isMobile ? 'About me' : 'Specialisms' }}</span>
       <span class="chev" aria-hidden="true" />
     </button>
   </section>
 
   <main class="doc" :aria-hidden="!unlocked || undefined" :inert="!unlocked || undefined">
+    <section id="about" class="block about-block">
+      <h3 class="mono section-title">About me</h3>
+      <p class="blurb about-copy">{{ profile.statement }}</p>
+    </section>
+
     <section id="specialisms" class="block">
       <h3 class="mono section-title">Specialisms</h3>
       <div class="grid areas-grid">
@@ -418,9 +468,18 @@ function onLegendActivate(areaId: string, index: number) {
 .block {
   margin-bottom: clamp(40px, 7vw, 84px);
 }
+#about,
 #specialisms,
 .areacard {
   scroll-margin-top: 28px;
+}
+/* Desktop keeps ABOUT ME on the hero face; mobile reads it in the document. */
+.about-block {
+  display: none;
+}
+.about-copy {
+  max-width: 62ch;
+  font-size: 1rem;
 }
 .section-title {
   font-size: 0.74rem;
@@ -622,6 +681,20 @@ function onLegendActivate(areaId: string, index: number) {
 @media (max-width: 820px) {
   .two {
     grid-template-columns: 1fr;
+  }
+
+  .hero.showcase {
+    /* Full first screen for the intro → explode showcase. */
+    height: 100svh;
+    min-height: 520px;
+  }
+
+  .hero.showcase .blurb-panel {
+    display: none;
+  }
+
+  .about-block {
+    display: block;
   }
 }
 </style>

@@ -49,10 +49,6 @@ function pick(area: Area) {
     phase.value = 'ask'
   }, 420)
 }
-
-function skip() {
-  emit('passed')
-}
 </script>
 
 <template>
@@ -88,8 +84,6 @@ function skip() {
         <span v-else-if="phase === 'ok'">Unlocked. Welcome in.</span>
         <span v-else>&nbsp;</span>
       </p>
-
-      <button type="button" class="skip mono" @click="skip">Skip check</button>
 
       <p class="tally mono" aria-live="polite">
         <span>Visits {{ formatCount(visits) }}</span>
@@ -235,26 +229,6 @@ h2 {
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
-}
-
-.skip {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-size: 0.68rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.skip:hover,
-.skip:focus-visible {
-  color: var(--ink);
-  outline: none;
 }
 
 .tally {
