@@ -1,12 +1,48 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
+import { Font } from 'three/examples/jsm/loaders/FontLoader.js'
+import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
-import helvetiker from '../assets/helvetiker_bold.typeface.json'
+import robotoBoldUrl from '../assets/fonts/RobotoMono-Bold.ttf?url'
+import robotoMediumUrl from '../assets/fonts/RobotoMono-Medium.ttf?url'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
+
+type EngraveFonts = { bold: Font; medium: Font }
+
+let engraveFontsPromise: Promise<EngraveFonts> | null = null
+
+function loadEngraveFonts(): Promise<EngraveFonts> {
+  if (!engraveFontsPromise) {
+    const loader = new TTFLoader()
+    engraveFontsPromise = Promise.all([
+      loader.loadAsync(robotoBoldUrl),
+      loader.loadAsync(robotoMediumUrl),
+    ]).then(([boldData, mediumData]) => ({
+      bold: new Font(boldData),
+      medium: new Font(mediumData),
+    }))
+  }
+  return engraveFontsPromise
+}
+
+/** Soft preload — safe to call during the bot check after first paint. */
+export function preloadEngraveFonts(): Promise<EngraveFonts> {
+  return loadEngraveFonts()
+}
+
+/** Yield so the bot-check UI can process input between heavy sync chunks. */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof requestIdleCallback === 'function') {
+      requestIdleCallback(() => resolve(), { timeout: 48 })
+    } else {
+      setTimeout(resolve, 0)
+    }
+  })
+}
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -235,10 +271,13 @@ export interface MultitoolOptions {
   onIntroComplete?: () => void
 }
 
-export function createMultitool(
+export async function createMultitool(
   canvas: HTMLCanvasElement,
   options: MultitoolOptions = {},
-): Multitool {
+): Promise<Multitool> {
+  const { bold: boldFont, medium: mediumFont } = await loadEngraveFonts()
+  await yieldToMain()
+
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -275,13 +314,17 @@ export function createMultitool(
   const pickTargets: THREE.Object3D[] = []
   const tools: ToolNode[] = []
 
+  // Polymer scales — matte body with soft clearcoat (rods stay steel below).
   const scaleMat = new THREE.MeshPhysicalMaterial({
-    color: 0x4a515a,
-    metalness: 0.92,
-    roughness: 0.34,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.25,
-    envMapIntensity: 1.4,
+    color: 0x5c636c,
+    metalness: 0.06,
+    roughness: 0.52,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.4,
+    sheen: 0.2,
+    sheenRoughness: 0.65,
+    sheenColor: new THREE.Color(0x8b929a),
+    envMapIntensity: 0.45,
   })
   const boltMat = new THREE.MeshPhysicalMaterial({
     color: 0x9aa2ad,
@@ -290,6 +333,8 @@ export function createMultitool(
     envMapIntensity: 1.6,
   })
   disposables.push(scaleMat, boltMat)
+
+  await yieldToMain()
 
   // ---- scales (front/back covers) ----
   function makeScale(z: number) {
@@ -318,29 +363,20 @@ export function createMultitool(
   const back = makeScale(-0.52)
   pickTargets.push(back.mesh)
 
-  // ---- front cover with identity CUT INTO it, then filled with enamel ----
-  // CSG only excavates the pocket (metal cavity walls). A separate, slightly
-  // shallower glyph mesh sits in that pocket as the white enamel inlay — so
-  // increasing RECESS deepens a real filled recess rather than hollow white walls.
-  // Static, and kept clear of the bored rod holes at ±PIVOT_X.
-  const inlayMat = new THREE.MeshPhysicalMaterial({
-    color: 0xf3f1ec,
-    metalness: 0.08,
-    roughness: 0.42,
-    clearcoat: 0.9,
-    clearcoatRoughness: 0.12,
-    envMapIntensity: 0.85,
+  // ---- front cover: Roboto Mono cut as a dark recessed engrave ----
+  // One CSG pass only (no enamel fill mesh) — sharper type, less main-thread work.
+  const inkMat = new THREE.MeshStandardMaterial({
+    color: 0x14181e,
+    metalness: 0.12,
+    roughness: 0.78,
+    envMapIntensity: 0.2,
   })
-  disposables.push(inlayMat)
-  const RECESS = 0.1
-  // Leave a hair of metal lip so the inlay reads as seated in the pocket.
-  const INLAY_CLEARANCE = 0.006
+  disposables.push(inkMat)
+  const RECESS = 0.07
 
-  const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
-  const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
   const sanitize = (text: string) =>
     Array.from(text)
-      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
+      .map((c) => (c === ' ' || c.charCodeAt(0) >= 32 ? c : '-'))
       .join('')
 
   const frontShape = panelShape(HANDLE_L, HANDLE_H)
@@ -359,13 +395,17 @@ export function createMultitool(
   // Actual front surface of the cover (accounts for the bevel), so the cut is
   // guaranteed to open at the surface and recess RECESS deep.
   const surfaceZ = frontGeo.boundingBox!.max.z
-  const cutterDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
-  const fillDepth = Math.max(RECESS - INLAY_CLEARANCE, 0.004)
+  const cutterDepth = RECESS + 0.06
 
-  const lines: Array<{ text: string; size: number; y: number }> = [
-    { text: sanitize(profile.name), size: 0.28, y: 0.1 },
-    { text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'), size: 0.078, y: -0.16 },
-    { text: sanitize(contact.email), size: 0.078, y: -0.34 },
+  const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
+    { text: sanitize(profile.name), size: 0.26, y: 0.12, font: boldFont },
+    {
+      text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'),
+      size: 0.072,
+      y: -0.14,
+      font: mediumFont,
+    },
+    { text: sanitize(contact.email), size: 0.07, y: -0.32, font: mediumFont },
   ].filter((line) => line.text.length > 0)
 
   // Layout helpers: centre each line on X, then centre the whole block on Y so the
@@ -373,10 +413,10 @@ export function createMultitool(
   function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
     return lines.map((line) => {
       const geo = new TextGeometry(line.text, {
-        font,
+        font: line.font,
         size: line.size,
         depth,
-        curveSegments: 4,
+        curveSegments: 3,
         bevelEnabled: false,
       })
       geo.computeBoundingBox()
@@ -405,22 +445,20 @@ export function createMultitool(
   const cutterGeo = mergeGeometries(cutterGeos, false)!
   cutterGeos.forEach((g) => g.dispose())
 
-  const fillGeos = layoutTextGeos(fillDepth, surfaceZ - RECESS)
-  centreBlockY(fillGeos)
-  const fillGeo = mergeGeometries(fillGeos, false)!
-  fillGeos.forEach((g) => g.dispose())
+  // CSG is the expensive sync spike — yield so the bot-check UI can stay responsive.
+  await yieldToMain()
 
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
-  // cover with the enamel glyphs still present so the scene still renders.
+  // (un-engraved) cover so the scene still renders.
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    const textBrush = new Brush(mergeVertices(cutterGeo), scaleMat)
+    const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    // Both groups stay metal — the pocket walls are the scale, not the enamel.
-    result.material = [scaleMat, scaleMat]
+    // Group 0 = polymer scale; group 1 = dark inked cavity walls/floor.
+    result.material = [scaleMat, inkMat]
     frontMesh = result
   } catch (err) {
     console.warn('[multitool] engraving CSG failed, using plain cover', err)
@@ -430,16 +468,14 @@ export function createMultitool(
   cutterGeo.dispose()
   disposables.push(frontMesh.geometry)
 
-  const inlayMesh = new THREE.Mesh(fillGeo, inlayMat)
-  disposables.push(fillGeo)
+  await yieldToMain()
 
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52
   frontGroup.add(frontMesh)
-  frontGroup.add(inlayMesh)
   assembly.add(frontGroup)
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
-  pickTargets.push(frontMesh, inlayMesh)
+  pickTargets.push(frontMesh)
 
   // ---- pivot + end pins (rods) ----
   // Position via mesh.position (not baked geo translate) so the intro can
