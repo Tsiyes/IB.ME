@@ -50,7 +50,7 @@ export interface Credential {
 export const profile = {
   name: 'ISAAC BRISTOW',
   creds: 'BSc (Hons)',
-  title: 'Implementation · PM · Product · Development · QA',
+  title: 'Implementation · Product · QA · Healthcare',
   statement:
     'Resilient, self-directed, pressure-motivated. Preference for high-intensity, high-reward environments. Individually, I find satisfaction delivering creative solutions via a diverse and expanding toolset; collaboratively, multi-disciplinary co-ordination and radical candour drive success in the projects I lead and contribute to.',
 }
@@ -64,14 +64,14 @@ export const contact = {
 
 export const areas: Area[] = [
   {
-    id: 'development',
+    id: 'implementation',
     code: '01',
-    label: 'Development',
+    label: 'Implementation',
     toolName: 'Driver',
     tool: 'driver',
-    tagline: 'Building & integrating the systems',
+    tagline: 'Building & integrating systems',
     blurb:
-      'Full-stack and integration engineering across healthcare platforms — from UI to interface engine to cloud infrastructure, increasingly augmented with LLM/agentic workflows.',
+      'Interfacing & integration engineering across healthcare platforms — from console applications to cloud infrastructure, increasingly augmented with LLM/agentic workflows.',
     skills: [
       'VueJS',
       'C#',
@@ -88,7 +88,6 @@ export const areas: Area[] = [
     highlights: [
       {
         title: 'Next-generation LIMS',
-        meta: 'Founding contributor',
         detail:
           'Founding member and key contributor to a next-generation Laboratory Information Management System.',
       },
@@ -140,7 +139,7 @@ export const areas: Area[] = [
     tool: 'ruler',
     tagline: 'Co-ordinating delivery at scale',
     blurb:
-      'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour and a bias toward measurable outcomes.',
+      'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour through hard-won trust.',
     skills: [
       'Project Management',
       'Operational Management',
