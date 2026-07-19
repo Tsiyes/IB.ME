@@ -393,17 +393,24 @@ export function createMultitool(
   const cutterDepth = RECESS + 0.06
 
   const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
-    { text: sanitize(profile.name, boldGlyphs), size: 0.26, y: 0.12, font: boldFont },
+    { text: sanitize(profile.name, boldGlyphs), 
+      size: 0.26, 
+      y: 0.12, 
+      font: boldFont },
+    { text: sanitize(profile.creds, boldGlyphs), 
+      size: 0.092, 
+      y: -0.14, 
+      font: boldFont },
     {
       text: sanitize('IMPLEMENTATION / PRODUCT / QA /HEALTHCARE', mediumGlyphs),
       size: 0.092,
-      y: -0.14,
+      y: -0.32,
       font: mediumFont,
     },
     {
       text: sanitize(contact.email, mediumGlyphs),
       size: 0.07,
-      y: -0.32,
+      y: -0.46,
       font: mediumFont,
     },
   ].filter((line) => line.text.length > 0)
