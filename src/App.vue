@@ -66,8 +66,8 @@ function onLegendActivate(areaId: string, index: number) {
     <BotCheck v-if="!unlocked" @passed="onUnlocked" />
   </Transition>
 
-  <!-- Canvas mounts under the gate; heavy WebGL/CSG warm is deferred to idle
-       so the human check stays responsive, then prioritised on unlock. -->
+  <!-- Canvas mounts under the gate, but WebGL/CSG only builds after unlock so
+       the human check never fights Three.js / engraving for the main thread. -->
   <section class="hero" :aria-hidden="!heroLive || undefined" :inert="!heroLive || undefined">
     <ToolScene
       :force-area="forceArea"

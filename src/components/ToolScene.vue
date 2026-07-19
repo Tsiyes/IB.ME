@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { createMultitool, preloadEngraveFonts, type Multitool } from '../three/multitool'
+import type { Multitool } from '../three/multitool'
 
 const props = defineProps<{
   forceArea?: number | null
@@ -18,30 +18,26 @@ let tool: Multitool | null = null
 let observer: ResizeObserver | null = null
 let disposed = false
 let building = false
-let idleHandle: number | null = null
-let warmTimer: ReturnType<typeof setTimeout> | null = null
 
-function clearWarmSchedule() {
-  if (idleHandle !== null && typeof cancelIdleCallback === 'function') {
-    cancelIdleCallback(idleHandle)
-    idleHandle = null
-  }
-  if (warmTimer !== null) {
-    clearTimeout(warmTimer)
-    warmTimer = null
-  }
-}
-
-function beginBuild() {
+/**
+ * Build the WebGL scene only after unlock.
+ *
+ * Idle warm-up (even delayed) still ran CSG / TTF work under the bot-check gate
+ * and froze clicks. Dynamic-import keeps Three + three-bvh-csg out of the initial
+ * parse path so the human check stays interactive.
+ */
+async function beginBuild() {
   if (disposed || building || tool || !canvas.value) return
   building = true
-  clearWarmSchedule()
   const el = canvas.value
-  void createMultitool(el, {
-    onAreaChange: (id) => emit('area-change', id),
-    onExpandChange: (expanded) => emit('expand-change', expanded),
-    onIntroComplete: () => emit('intro-complete'),
-  }).then((instance) => {
+  try {
+    const { createMultitool } = await import('../three/multitool')
+    if (disposed) return
+    const instance = await createMultitool(el, {
+      onAreaChange: (id) => emit('area-change', id),
+      onExpandChange: (expanded) => emit('expand-change', expanded),
+      onIntroComplete: () => emit('intro-complete'),
+    })
     if (disposed) {
       instance.dispose()
       return
@@ -50,37 +46,16 @@ function beginBuild() {
     observer = new ResizeObserver(() => tool?.resize())
     if (el.parentElement) observer.observe(el.parentElement)
     if (props.runIntro) tool.playIntro()
-  })
-}
-
-/** Warm during idle so the bot-check gate stays clickable on first paint. */
-function scheduleWarm() {
-  if (disposed || building || tool) return
-  // Minimum delay: let the gate paint and accept the first pointer events.
-  warmTimer = setTimeout(() => {
-    warmTimer = null
-    if (disposed || building || tool) return
-    if (typeof requestIdleCallback === 'function') {
-      idleHandle = requestIdleCallback(() => {
-        idleHandle = null
-        beginBuild()
-      }, { timeout: 1800 })
-    } else {
-      beginBuild()
-    }
-  }, 280)
+  } catch (err) {
+    building = false
+    console.error('[ToolScene] failed to build multitool', err)
+  }
 }
 
 onMounted(() => {
   if (!canvas.value) return
-  // Fonts only — cheap compared to CSG; still deferred a tick to not contend
-  // with BotCheck's first interactive frame.
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => {
-      void preloadEngraveFonts()
-      scheduleWarm()
-    })
-  })
+  // If the gate was already skipped/unlocked before mount, start immediately.
+  if (props.runIntro) void beginBuild()
 })
 
 watch(
@@ -92,15 +67,13 @@ watch(
   () => props.runIntro,
   (v) => {
     if (!v) return
-    // Unlock wins over idle warm — start immediately if still pending.
-    if (!tool) beginBuild()
+    if (!tool) void beginBuild()
     else tool.playIntro()
   },
 )
 
 onBeforeUnmount(() => {
   disposed = true
-  clearWarmSchedule()
   observer?.disconnect()
   tool?.dispose()
   tool = null

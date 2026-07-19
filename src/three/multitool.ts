@@ -28,19 +28,12 @@ function loadEngraveFonts(): Promise<EngraveFonts> {
   return engraveFontsPromise
 }
 
-/** Soft preload — safe to call during the bot check after first paint. */
-export function preloadEngraveFonts(): Promise<EngraveFonts> {
-  return loadEngraveFonts()
-}
-
-/** Yield so the bot-check UI can process input between heavy sync chunks. */
+/** Yield between heavy sync chunks (CSG, extrudes) so unlock→intro stays fluid. */
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof requestIdleCallback === 'function') {
-      requestIdleCallback(() => resolve(), { timeout: 48 })
-    } else {
-      setTimeout(resolve, 0)
-    }
+    // Prefer a macrotask over idle — idle can fire back-to-back while the tab
+    // looks "idle" and still starve click handlers / transitions.
+    setTimeout(resolve, 0)
   })
 }
 
@@ -445,7 +438,7 @@ export async function createMultitool(
   const cutterGeo = mergeGeometries(cutterGeos, false)!
   cutterGeos.forEach((g) => g.dispose())
 
-  // CSG is the expensive sync spike — yield so the bot-check UI can stay responsive.
+  // CSG is a long sync spike — breathe before/after so the unlock transition can paint.
   await yieldToMain()
 
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
@@ -453,7 +446,9 @@ export async function createMultitool(
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
+    await yieldToMain()
     const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
+    await yieldToMain()
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
