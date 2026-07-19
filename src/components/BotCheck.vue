@@ -15,6 +15,65 @@ function shuffle<T>(list: T[]): T[] {
   return out
 }
 
+/** Opposite-hue ink that stays readable on a solid accent fill. */
+function complementaryInk(hex: string): string {
+  const raw = hex.replace('#', '')
+  const n =
+    raw.length === 3
+      ? raw
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : raw
+  const r = parseInt(n.slice(0, 2), 16) / 255
+  const g = parseInt(n.slice(2, 4), 16) / 255
+  const b = parseInt(n.slice(4, 6), 16) / 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  let h = 0
+  let s = 0
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    switch (max) {
+      case r:
+        h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+        break
+      case g:
+        h = ((b - r) / d + 2) / 6
+        break
+      default:
+        h = ((r - g) / d + 4) / 6
+    }
+  }
+  const ch = (h * 360 + 180) % 360
+  // Light complementary on darker fills; deep complementary on lighter fills.
+  const tl = l < 0.55 ? 0.94 : 0.16
+  const ts = Math.min(0.4, s * 0.55 + 0.12)
+  return hslToHex(ch, ts, tl)
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+  const c = (1 - Math.abs(2 * l - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l - c / 2
+  let rp = 0
+  let gp = 0
+  let bp = 0
+  if (h < 60) [rp, gp, bp] = [c, x, 0]
+  else if (h < 120) [rp, gp, bp] = [x, c, 0]
+  else if (h < 180) [rp, gp, bp] = [0, c, x]
+  else if (h < 240) [rp, gp, bp] = [0, x, c]
+  else if (h < 300) [rp, gp, bp] = [x, 0, c]
+  else [rp, gp, bp] = [c, 0, x]
+  const to = (v: number) =>
+    Math.round((v + m) * 255)
+      .toString(16)
+      .padStart(2, '0')
+  return `#${to(rp)}${to(gp)}${to(bp)}`
+}
+
 const target = areas[Math.floor(Math.random() * areas.length)]
 const choices = ref<Area[]>([])
 const phase = ref<'ask' | 'wrong' | 'ok'>('ask')
@@ -55,7 +114,12 @@ function pick(area: Area) {
   <div class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-inner" :class="{ shake }">
       <p class="eyebrow mono">Human check</p>
-      <h2 id="gate-title">Select the {{ target.toolName }}</h2>
+      <h2 id="gate-title">Deploy the {{ target.toolName }}</h2>
+      <p class="prompt">
+        Quick tool ID — pick the implement for
+        <strong :style="{ color: target.accent }">{{ target.label }}</strong>
+        to open the CV.
+      </p>
 
       <div class="choices" role="group" aria-label="Tool choices">
         <button
@@ -64,13 +128,15 @@ function pick(area: Area) {
           type="button"
           class="choice"
           :class="{ ok: phase === 'ok' && area.id === target.id }"
-          :style="{ '--accent': area.accent }"
+          :style="{
+            '--accent': area.accent,
+            '--ink': complementaryInk(area.accent),
+          }"
+          :aria-label="`${area.toolName} — ${area.label}`"
           :disabled="phase === 'ok'"
           @click="pick(area)"
         >
-          <span class="dot" />
           <span class="choice-tool mono">{{ area.toolName }}</span>
-          <span class="choice-area">{{ area.label }}</span>
         </button>
       </div>
 
@@ -103,7 +169,7 @@ function pick(area: Area) {
 }
 
 .gate-inner {
-  width: min(520px, 100%);
+  width: min(420px, 100%);
   text-align: center;
 }
 
@@ -156,66 +222,52 @@ h2 {
 .choices {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .choice {
   --accent: #4d48fc;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
+  --ink: #fff8f0;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
   margin: 0;
-  padding: 14px 14px 12px;
-  border: 1px solid rgba(18, 24, 31, 0.12);
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.72);
+  padding: 12px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--accent);
   color: var(--ink);
   font: inherit;
-  text-align: left;
   cursor: pointer;
   transition:
     transform 160ms ease,
     box-shadow 160ms ease,
-    background 160ms ease,
-    border-color 160ms ease;
+    filter 160ms ease;
 }
 
 .choice:hover,
 .choice:focus-visible {
   transform: translateY(-2px);
-  background: #fff;
-  border-color: color-mix(in srgb, var(--accent) 45%, rgba(18, 24, 31, 0.12));
-  box-shadow: 0 8px 22px rgba(24, 33, 46, 0.12);
+  filter: brightness(1.06);
+  box-shadow: 0 10px 24px color-mix(in srgb, var(--accent) 35%, transparent);
   outline: none;
 }
 
 .choice.ok {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ink) 55%, transparent);
 }
 
 .choice:disabled {
   cursor: default;
-}
-
-.dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 24%, transparent);
-  margin-bottom: 4px;
+  transform: none;
+  filter: none;
 }
 
 .choice-tool {
-  font-size: 0.84rem;
-  font-weight: 500;
-}
-
-.choice-area {
-  font-size: 0.72rem;
-  color: var(--muted);
+  font-size: clamp(0.95rem, 3.2vw, 1.15rem);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .status {
@@ -239,12 +291,6 @@ h2 {
 }
 .tally .sep {
   opacity: 0.55;
-}
-
-@media (max-width: 520px) {
-  .choices {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
