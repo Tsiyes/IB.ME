@@ -290,7 +290,7 @@ function onScrollCue() {
 }
 
 .blurb-panel {
-  --accent: #3b82f6;
+  --accent: #4d48fc;
   position: absolute;
   left: 50%;
   bottom: clamp(118px, 18vh, 168px);
@@ -399,7 +399,7 @@ function onScrollCue() {
   }
 }
 .leg {
-  --accent: #3b82f6;
+  --accent: #4d48fc;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -508,7 +508,7 @@ function onScrollCue() {
   }
 }
 .areacard {
-  --accent: #3b82f6;
+  --accent: #4d48fc;
   border: 1px solid rgba(18, 24, 31, 0.1);
   border-top: 3px solid var(--accent);
   border-radius: 6px;

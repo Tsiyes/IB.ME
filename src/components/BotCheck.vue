@@ -165,7 +165,7 @@ h2 {
 }
 
 .choice {
-  --accent: #3b82f6;
+  --accent: #4d48fc;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
