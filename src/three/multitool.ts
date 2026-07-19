@@ -268,7 +268,7 @@ export function createMultitool(
 
   // Rest view is full-frontal — flat ambient washed the face. Use a soft
   // sky/ground gradient plus raking keys so bevels and the engraved recess read.
-  scene.add(new THREE.HemisphereLight(0xf4f7ff, 0x9aa3b0, 0.5))
+  scene.add(new THREE.HemisphereLight(0xf4f7ff, 0x9aa3b0, 0.1))
 
   // Warm key from camera-right / high — main shape light, not head-on.
   const key = new THREE.DirectionalLight(0xfff4e8, 2.05)
@@ -308,15 +308,15 @@ export function createMultitool(
   // Polymer scales — colour left for the owner to tune; rods stay steel.
   // Clearcoat + env nudged so the new raking rig can shape the frontal face.
   const scaleMat = new THREE.MeshPhysicalMaterial({
-    color: 0x3b82f6,
+    color: 0x4d48fc,
     metalness: 0.06,
     roughness: 0.48,
-    clearcoat: 0.55,
+    clearcoat: 0.25,
     clearcoatRoughness: 0.28,
     sheen: 0.22,
     sheenRoughness: 0.6,
-    sheenColor: new THREE.Color(0x93c5fd),
-    envMapIntensity: 0.72,
+    sheenColor: new THREE.Color(0x4d48fc),
+    envMapIntensity: 0.3,
   })
   const boltMat = new THREE.MeshPhysicalMaterial({
     color: 0x9aa2ad,
@@ -356,7 +356,7 @@ export function createMultitool(
   // ---- front cover: Roboto Mono cut as a dark recessed engrave ----
   // One CSG pass; fonts are bundled typeface JSON (not runtime TTF).
   const inkMat = new THREE.MeshStandardMaterial({
-    color: 0x14181e,
+    color: 0xfdcb93,
     metalness: 0.12,
     roughness: 0.78,
     envMapIntensity: 0.2,
@@ -395,8 +395,8 @@ export function createMultitool(
   const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
     { text: sanitize(profile.name, boldGlyphs), size: 0.26, y: 0.12, font: boldFont },
     {
-      text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE', mediumGlyphs),
-      size: 0.072,
+      text: sanitize('IMPLEMENTATION / PRODUCT / QA /HEALTHCARE', mediumGlyphs),
+      size: 0.092,
       y: -0.14,
       font: mediumFont,
     },

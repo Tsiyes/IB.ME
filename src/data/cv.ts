@@ -96,7 +96,7 @@ export const areas: Area[] = [
         detail: 'End-to-end and integration test suites with Cypress + Mochawesome reporting.',
       },
     ],
-    accent: '#3b82f6',
+    accent: '#ff5f59',
   },
   {
     id: 'product',
@@ -122,7 +122,7 @@ export const areas: Area[] = [
       {
         title: 'Clinical partnerships',
         detail:
-          'Stabilised relationships with key clinical partners through deliberate product design.',
+          'Stabilised relationships with key clinical partners through deliberate product design and effective communication.',
       },
       {
         title: 'Regulatory readiness',
@@ -164,12 +164,12 @@ export const areas: Area[] = [
   {
     id: 'healthcare',
     code: '04',
-    label: 'Healthcare Sciences',
+    label: 'Healthcare',
     toolName: 'Scalpel',
     tool: 'scalpel',
     tagline: 'The scientific foundation',
     blurb:
-      'A molecular and cellular pathology background underpins everything — from assay validation to the healthcare integration standards that move results between systems.',
+      'A molecular and cellular pathology background contextualises the work I do in healthcare software, and informs the decisions I make in product and implementation.',
     skills: [
       'Molecular Biology',
       'Cellular Pathology',
@@ -178,6 +178,9 @@ export const areas: Area[] = [
       'Roche',
       'Leica',
       '3DHISTECH',
+      'Illumina',
+      'Thermo Fisher',
+      'Qiagen',
     ],
     highlights: [
       {
@@ -220,7 +223,7 @@ export const experience: Company[] = [
           'Integration of medical devices and systems',
           'Stakeholder management',
         ],
-        skills: ['Cypress', 'SQL', 'Vue.js', 'C#', 'Kubernetes', 'Azure', 'Tableau'],
+        skills: ['Cypress', 'SQL', 'Vue.js', 'C#', 'Kubernetes', 'Azure', 'Tableau', 'Notion'],
       },
       {
         title: 'Laboratory Supervisor',
@@ -249,10 +252,10 @@ export const experience: Company[] = [
     meta: 'Oct 2012 — Jul 2020',
     roles: [
       {
-        title: 'Various BoH & Retail roles',
+        title: 'Various BoH & Retail',
         period: 'Oct 2012 — Jul 2020',
         summary:
-          'A range of hospitality and retail positions held alongside education, building the resilience and pace that carried into laboratory and engineering work.',
+          'Mstly kitchen and retail positions, held alongside education, building the resilience and work ethic that carried me through into laboratory and engineering work.',
       },
     ],
   },
@@ -265,7 +268,7 @@ export const education: Credential[] = [
 ]
 
 export const accolades: string[] = [
-  'Founding member and key contributor of a next-generation LIMS system.',
+  'Founding member and key contributor of a next-generation web-based LIMS system.',
   'Stabilised relationships with key clinical partners through product design.',
   'Delivered the first nationally verified SARS-CoV-2 Omicron variant detection panel.',
   'Designed and verified a 10× scale-up for DirectPCR COVID testing.',
