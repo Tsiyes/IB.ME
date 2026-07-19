@@ -1,41 +1,15 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { Font } from 'three/examples/jsm/loaders/FontLoader.js'
-import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js'
+import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
-import robotoBoldUrl from '../assets/fonts/RobotoMono-Bold.ttf?url'
-import robotoMediumUrl from '../assets/fonts/RobotoMono-Medium.ttf?url'
+// Pre-converted typeface JSON (subset of engraving glyphs) — same cheap path as
+// Helvetiker. Runtime TTFLoader + CDN opentype.js was the bot-check freeze.
+import robotoBold from '../assets/fonts/RobotoMono-Bold.typeface.json'
+import robotoMedium from '../assets/fonts/RobotoMono-Medium.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
-
-type EngraveFonts = { bold: Font; medium: Font }
-
-let engraveFontsPromise: Promise<EngraveFonts> | null = null
-
-function loadEngraveFonts(): Promise<EngraveFonts> {
-  if (!engraveFontsPromise) {
-    const loader = new TTFLoader()
-    engraveFontsPromise = Promise.all([
-      loader.loadAsync(robotoBoldUrl),
-      loader.loadAsync(robotoMediumUrl),
-    ]).then(([boldData, mediumData]) => ({
-      bold: new Font(boldData),
-      medium: new Font(mediumData),
-    }))
-  }
-  return engraveFontsPromise
-}
-
-/** Yield between heavy sync chunks (CSG, extrudes) so unlock→intro stays fluid. */
-function yieldToMain(): Promise<void> {
-  return new Promise((resolve) => {
-    // Prefer a macrotask over idle — idle can fire back-to-back while the tab
-    // looks "idle" and still starve click handlers / transitions.
-    setTimeout(resolve, 0)
-  })
-}
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -264,13 +238,10 @@ export interface MultitoolOptions {
   onIntroComplete?: () => void
 }
 
-export async function createMultitool(
+export function createMultitool(
   canvas: HTMLCanvasElement,
   options: MultitoolOptions = {},
-): Promise<Multitool> {
-  const { bold: boldFont, medium: mediumFont } = await loadEngraveFonts()
-  await yieldToMain()
-
+): Multitool {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -327,8 +298,6 @@ export async function createMultitool(
   })
   disposables.push(scaleMat, boltMat)
 
-  await yieldToMain()
-
   // ---- scales (front/back covers) ----
   function makeScale(z: number) {
     const shape = panelShape(HANDLE_L, HANDLE_H)
@@ -357,7 +326,7 @@ export async function createMultitool(
   pickTargets.push(back.mesh)
 
   // ---- front cover: Roboto Mono cut as a dark recessed engrave ----
-  // One CSG pass only (no enamel fill mesh) — sharper type, less main-thread work.
+  // One CSG pass; fonts are bundled typeface JSON (not runtime TTF).
   const inkMat = new THREE.MeshStandardMaterial({
     color: 0x14181e,
     metalness: 0.12,
@@ -367,9 +336,14 @@ export async function createMultitool(
   disposables.push(inkMat)
   const RECESS = 0.07
 
-  const sanitize = (text: string) =>
+  const loader = new FontLoader()
+  const boldFont = loader.parse(robotoBold as unknown as Parameters<FontLoader['parse']>[0])
+  const mediumFont = loader.parse(robotoMedium as unknown as Parameters<FontLoader['parse']>[0])
+  const boldGlyphs = (boldFont.data as { glyphs: Record<string, unknown> }).glyphs
+  const mediumGlyphs = (mediumFont.data as { glyphs: Record<string, unknown> }).glyphs
+  const sanitize = (text: string, glyphs: Record<string, unknown>) =>
     Array.from(text)
-      .map((c) => (c === ' ' || c.charCodeAt(0) >= 32 ? c : '-'))
+      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
       .join('')
 
   const frontShape = panelShape(HANDLE_L, HANDLE_H)
@@ -391,14 +365,19 @@ export async function createMultitool(
   const cutterDepth = RECESS + 0.06
 
   const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
-    { text: sanitize(profile.name), size: 0.26, y: 0.12, font: boldFont },
+    { text: sanitize(profile.name, boldGlyphs), size: 0.26, y: 0.12, font: boldFont },
     {
-      text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'),
+      text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE', mediumGlyphs),
       size: 0.072,
       y: -0.14,
       font: mediumFont,
     },
-    { text: sanitize(contact.email), size: 0.07, y: -0.32, font: mediumFont },
+    {
+      text: sanitize(contact.email, mediumGlyphs),
+      size: 0.07,
+      y: -0.32,
+      font: mediumFont,
+    },
   ].filter((line) => line.text.length > 0)
 
   // Layout helpers: centre each line on X, then centre the whole block on Y so the
@@ -409,7 +388,9 @@ export async function createMultitool(
         font: line.font,
         size: line.size,
         depth,
-        curveSegments: 3,
+        // Roboto Mono outlines are denser than Helvetiker; 2 keeps CSG in the
+        // same ballpark as the responsive Helvetiker@4 baseline.
+        curveSegments: 2,
         bevelEnabled: false,
       })
       geo.computeBoundingBox()
@@ -438,17 +419,12 @@ export async function createMultitool(
   const cutterGeo = mergeGeometries(cutterGeos, false)!
   cutterGeos.forEach((g) => g.dispose())
 
-  // CSG is a long sync spike — breathe before/after so the unlock transition can paint.
-  await yieldToMain()
-
   // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
   // (un-engraved) cover so the scene still renders.
   let frontMesh: THREE.Mesh
   try {
     const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    await yieldToMain()
     const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
-    await yieldToMain()
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
@@ -462,8 +438,6 @@ export async function createMultitool(
   frontGeo.dispose()
   cutterGeo.dispose()
   disposables.push(frontMesh.geometry)
-
-  await yieldToMain()
 
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52

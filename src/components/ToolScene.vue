@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import type { Multitool } from '../three/multitool'
+import { createMultitool, type Multitool } from '../three/multitool'
 
 const props = defineProps<{
   forceArea?: number | null
@@ -16,46 +16,19 @@ const emit = defineEmits<{
 const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
 let observer: ResizeObserver | null = null
-let disposed = false
-let building = false
-
-/**
- * Build the WebGL scene only after unlock.
- *
- * Idle warm-up (even delayed) still ran CSG / TTF work under the bot-check gate
- * and froze clicks. Dynamic-import keeps Three + three-bvh-csg out of the initial
- * parse path so the human check stays interactive.
- */
-async function beginBuild() {
-  if (disposed || building || tool || !canvas.value) return
-  building = true
-  const el = canvas.value
-  try {
-    const { createMultitool } = await import('../three/multitool')
-    if (disposed) return
-    const instance = await createMultitool(el, {
-      onAreaChange: (id) => emit('area-change', id),
-      onExpandChange: (expanded) => emit('expand-change', expanded),
-      onIntroComplete: () => emit('intro-complete'),
-    })
-    if (disposed) {
-      instance.dispose()
-      return
-    }
-    tool = instance
-    observer = new ResizeObserver(() => tool?.resize())
-    if (el.parentElement) observer.observe(el.parentElement)
-    if (props.runIntro) tool.playIntro()
-  } catch (err) {
-    building = false
-    console.error('[ToolScene] failed to build multitool', err)
-  }
-}
 
 onMounted(() => {
   if (!canvas.value) return
-  // If the gate was already skipped/unlocked before mount, start immediately.
-  if (props.runIntro) void beginBuild()
+  tool = createMultitool(canvas.value, {
+    onAreaChange: (id) => emit('area-change', id),
+    onExpandChange: (expanded) => emit('expand-change', expanded),
+    onIntroComplete: () => emit('intro-complete'),
+  })
+
+  observer = new ResizeObserver(() => tool?.resize())
+  if (canvas.value.parentElement) observer.observe(canvas.value.parentElement)
+
+  if (props.runIntro) tool.playIntro()
 })
 
 watch(
@@ -66,14 +39,11 @@ watch(
 watch(
   () => props.runIntro,
   (v) => {
-    if (!v) return
-    if (!tool) void beginBuild()
-    else tool.playIntro()
+    if (v) tool?.playIntro()
   },
 )
 
 onBeforeUnmount(() => {
-  disposed = true
   observer?.disconnect()
   tool?.dispose()
   tool = null
