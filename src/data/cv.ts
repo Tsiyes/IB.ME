@@ -257,7 +257,7 @@ export const experience: Company[] = [
         title: 'Various BoH & Retail',
         period: 'Oct 2012 — Jul 2020',
         summary:
-          'Mstly kitchen and retail positions, held alongside education, building the resilience and work ethic that carried me through into laboratory and engineering work.',
+          'Kitchen and retail positions, held alongside education, building the resilience and work ethic that carried me through into laboratory and engineering work.',
       },
     ],
   },
