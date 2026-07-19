@@ -1,12 +1,32 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
+import { Font } from 'three/examples/jsm/loaders/FontLoader.js'
+import { TTFLoader } from 'three/examples/jsm/loaders/TTFLoader.js'
 import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
-import helvetiker from '../assets/helvetiker_bold.typeface.json'
+import robotoBoldUrl from '../assets/fonts/RobotoMono-Bold.ttf?url'
+import robotoMediumUrl from '../assets/fonts/RobotoMono-Medium.ttf?url'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
+
+type EngraveFonts = { bold: Font; medium: Font }
+
+let engraveFontsPromise: Promise<EngraveFonts> | null = null
+
+function loadEngraveFonts(): Promise<EngraveFonts> {
+  if (!engraveFontsPromise) {
+    const loader = new TTFLoader()
+    engraveFontsPromise = Promise.all([
+      loader.loadAsync(robotoBoldUrl),
+      loader.loadAsync(robotoMediumUrl),
+    ]).then(([boldData, mediumData]) => ({
+      bold: new Font(boldData),
+      medium: new Font(mediumData),
+    }))
+  }
+  return engraveFontsPromise
+}
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -235,10 +255,12 @@ export interface MultitoolOptions {
   onIntroComplete?: () => void
 }
 
-export function createMultitool(
+export async function createMultitool(
   canvas: HTMLCanvasElement,
   options: MultitoolOptions = {},
-): Multitool {
+): Promise<Multitool> {
+  const { bold: boldFont, medium: mediumFont } = await loadEngraveFonts()
+
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -275,14 +297,19 @@ export function createMultitool(
   const pickTargets: THREE.Object3D[] = []
   const tools: ToolNode[] = []
 
+  // Polymer / glass-filled nylon scales — matte body, soft clearcoat, not chrome.
   const scaleMat = new THREE.MeshPhysicalMaterial({
-    color: 0x4a515a,
-    metalness: 0.92,
-    roughness: 0.34,
-    clearcoat: 0.5,
-    clearcoatRoughness: 0.25,
-    envMapIntensity: 1.4,
+    color: 0x5c636c,
+    metalness: 0.06,
+    roughness: 0.52,
+    clearcoat: 0.45,
+    clearcoatRoughness: 0.4,
+    sheen: 0.2,
+    sheenRoughness: 0.65,
+    sheenColor: new THREE.Color(0x8b929a),
+    envMapIntensity: 0.45,
   })
+  // Steel rods stay metallic (unchanged look).
   const boltMat = new THREE.MeshPhysicalMaterial({
     color: 0x9aa2ad,
     metalness: 1,
@@ -319,24 +346,21 @@ export function createMultitool(
   pickTargets.push(back.mesh)
 
   // ---- front cover with identity CUT INTO it (dark recessed engraving) ----
-  // CSG excavates a real pocket; cut faces use a dark "ink" material so the
-  // side walls and floor read as depth rather than a flush enamel fill.
-  // Static, and kept clear of the bored rod holes at ±PIVOT_X.
+  // Roboto Mono matches the UI. CSG pocket + dark ink on cut faces for depth;
+  // sharp un-beveled glyph cutters keep small caps legible.
   const inkMat = new THREE.MeshStandardMaterial({
-    color: 0x0a0d12,
-    metalness: 0.22,
-    roughness: 0.92,
-    envMapIntensity: 0.28,
+    color: 0x14181e,
+    metalness: 0.12,
+    roughness: 0.78,
+    envMapIntensity: 0.2,
   })
   disposables.push(inkMat)
-  // Deep enough that the cavity walls catch light; SCALE_D is 0.14 so stay under that.
-  const RECESS = 0.09
+  // Deep enough for wall catch-light; short of SCALE_D so the plate stays solid.
+  const RECESS = 0.07
 
-  const font = new FontLoader().parse(helvetiker as unknown as Parameters<FontLoader['parse']>[0])
-  const glyphs = (font.data as { glyphs: Record<string, unknown> }).glyphs
   const sanitize = (text: string) =>
     Array.from(text)
-      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
+      .map((c) => (c === ' ' || c.charCodeAt(0) >= 32 ? c : '-'))
       .join('')
 
   const frontShape = panelShape(HANDLE_L, HANDLE_H)
@@ -355,12 +379,17 @@ export function createMultitool(
   // Actual front surface of the cover (accounts for the bevel), so the cut is
   // guaranteed to open at the surface and recess RECESS deep.
   const surfaceZ = frontGeo.boundingBox!.max.z
-  const cutterDepth = RECESS + 0.08 // extends a little proud so it fully crosses the surface
+  const cutterDepth = RECESS + 0.06 // extends a little proud so it fully crosses the surface
 
-  const lines: Array<{ text: string; size: number; y: number }> = [
-    { text: sanitize(profile.name), size: 0.28, y: 0.1 },
-    { text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'), size: 0.078, y: -0.16 },
-    { text: sanitize(contact.email), size: 0.078, y: -0.34 },
+  const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
+    { text: sanitize(profile.name), size: 0.26, y: 0.12, font: boldFont },
+    {
+      text: sanitize('IMPLEMENTATION/PRODUCT/QA/HEALTHCARE'),
+      size: 0.072,
+      y: -0.14,
+      font: mediumFont,
+    },
+    { text: sanitize(contact.email), size: 0.07, y: -0.32, font: mediumFont },
   ].filter((line) => line.text.length > 0)
 
   // Layout helpers: centre each line on X, then centre the whole block on Y so the
@@ -368,15 +397,11 @@ export function createMultitool(
   function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
     return lines.map((line) => {
       const geo = new TextGeometry(line.text, {
-        font,
+        font: line.font,
         size: line.size,
         depth,
-        curveSegments: 5,
-        // Tiny bevel softens the cavity lip so the recess reads as engraved, not laser-cut.
-        bevelEnabled: true,
-        bevelThickness: 0.012,
-        bevelSize: 0.01,
-        bevelSegments: 2,
+        curveSegments: 3,
+        bevelEnabled: false,
       })
       geo.computeBoundingBox()
       const bb = geo.boundingBox!
@@ -413,7 +438,7 @@ export function createMultitool(
     const evaluator = new Evaluator()
     evaluator.useGroups = true
     const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    // Group 0 = metal scale; group 1 = dark inked cavity walls/floor.
+    // Group 0 = polymer scale; group 1 = dark inked cavity walls/floor.
     result.material = [scaleMat, inkMat]
     frontMesh = result
   } catch (err) {
