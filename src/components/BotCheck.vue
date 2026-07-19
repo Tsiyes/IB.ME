@@ -55,12 +55,7 @@ function pick(area: Area) {
   <div class="gate" role="dialog" aria-modal="true" aria-labelledby="gate-title">
     <div class="gate-inner" :class="{ shake }">
       <p class="eyebrow mono">Human check</p>
-      <h2 id="gate-title">Deploy the {{ target.toolName }}</h2>
-      <p class="prompt">
-        Quick tool ID — pick the implement for
-        <strong :style="{ color: target.accent }">{{ target.label }}</strong>
-        to open the CV.
-      </p>
+      <h2 id="gate-title">Select the {{ target.toolName }}</h2>
 
       <div class="choices" role="group" aria-label="Tool choices">
         <button
