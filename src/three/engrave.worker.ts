@@ -26,11 +26,11 @@ ctx.onmessage = (event: MessageEvent<EngraveRequest>) => {
 
     const evaluator = new Evaluator()
     evaluator.useGroups = true
-    // CDT clipping is ~3.7x faster than the legacy splitter for this text
-    // boolean and yields a cleaner, ~half-as-dense result; the silhouette /
-    // recess are unchanged. `uv` is dropped — the cover metals are untextured.
-    // (useCDTClipping is a runtime setter missing from the shipped typings.)
-    ;(evaluator as Evaluator & { useCDTClipping: boolean }).useCDTClipping = true
+    // Keep the default (legacy) triangle splitter: CDT clipping was ~3.7x
+    // faster but left the coplanar caps of letter counters (the holes in B/R/O
+    // etc.) non-watertight, so you could see the layer behind through them.
+    // Correctness wins here — the boolean runs off the main thread, so its cost
+    // no longer blocks anything. `uv` is dropped: the cover metals are untextured.
     evaluator.attributes = ['position', 'normal']
     const result = evaluator.evaluate(new Brush(front), new Brush(cutter), SUBTRACTION)
 

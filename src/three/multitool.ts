@@ -511,9 +511,8 @@ export function createMultitool(
       const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
       const evaluator = new Evaluator()
       evaluator.useGroups = true
-      // Match the worker: CDT clipping (~3.7x faster, cleaner result) and skip
-      // the unused uv attribute. (useCDTClipping is missing from the typings.)
-      ;(evaluator as Evaluator & { useCDTClipping: boolean }).useCDTClipping = true
+      // Match the worker: legacy splitter (CDT left letter counters
+      // see-through) and skip the unused uv attribute.
       evaluator.attributes = ['position', 'normal']
       const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
       applyEngraveResult(result.geometry)
