@@ -26,6 +26,12 @@ ctx.onmessage = (event: MessageEvent<EngraveRequest>) => {
 
     const evaluator = new Evaluator()
     evaluator.useGroups = true
+    // CDT clipping is ~3.7x faster than the legacy splitter for this text
+    // boolean and yields a cleaner, ~half-as-dense result; the silhouette /
+    // recess are unchanged. `uv` is dropped — the cover metals are untextured.
+    // (useCDTClipping is a runtime setter missing from the shipped typings.)
+    ;(evaluator as Evaluator & { useCDTClipping: boolean }).useCDTClipping = true
+    evaluator.attributes = ['position', 'normal']
     const result = evaluator.evaluate(new Brush(front), new Brush(cutter), SUBTRACTION)
 
     const { data, transfer } = serializeGeometry(result.geometry)
