@@ -18,7 +18,7 @@ const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
-/** Mirrors visual boot segments lit (App…Shell). */
+/** Mirrors visual boot segments lit (Implementation…HealthTech). */
 const bootStage = ref(0)
 const isMobile = ref(
   typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches,
@@ -87,7 +87,7 @@ async function onBootProgress(stage: number) {
   if (stage < 4) return
   if (bootReady.value) return
 
-  // Even App→Engine→Loading→Shell clicks, then reveal the gate under the splash.
+  // Even Implementation→Product→QA→HealthTech clicks, then reveal the gate.
   await playShellAndDwell()
   bootReady.value = true
   await nextTick()

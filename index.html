@@ -106,6 +106,7 @@
         letter-spacing: 0.14em;
         text-transform: uppercase;
         color: #7b8693;
+        transition: color 220ms ease;
       }
       #ib-boot.is-done .boot-ring {
         animation: none;
@@ -156,7 +157,7 @@
           <circle class="boot-seg" data-i="3" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="-88" />
           <circle class="boot-seg" data-i="4" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="-132" />
         </svg>
-        <p class="boot-status" id="ib-boot-status">Loading</p>
+        <p class="boot-status" id="ib-boot-status">Loading…</p>
       </div>
     </div>
 
@@ -164,7 +165,9 @@
 
     <script>
       ;(function () {
-        var labels = ['App', 'Engine', 'Loading', 'Shell']
+        // Matches specialist-area accents downstream (Implementation → Product → QA → HealthTech).
+        var labels = ['Implementation', 'Product', 'QA', 'HealthTech']
+        var colors = ['#ff5f59', '#2f9e8f', '#e0a85c', '#c96b8c']
         var stage = 0
         var root = document.getElementById('ib-boot')
         var status = document.getElementById('ib-boot-status')
@@ -188,7 +191,13 @@
           if (status) {
             // Indeterminate until JS fills segments (avoids a stuck first click
             // while Three.js parses on the main thread).
-            status.textContent = stage > 0 ? labels[stage - 1] : 'Loading'
+            if (stage > 0) {
+              status.textContent = labels[stage - 1]
+              status.style.color = colors[stage - 1]
+            } else {
+              status.textContent = 'Loading…'
+              status.style.color = ''
+            }
           }
         }
 

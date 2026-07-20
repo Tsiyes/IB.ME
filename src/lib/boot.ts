@@ -3,8 +3,8 @@
 import { playAccordionClick } from '../three/sfx'
 
 /**
- * Visual order: App → Engine → Loading → Shell.
- * Shell always plays last and dwells before the splash dismisses.
+ * Visual order matches specialist accents: Implementation → Product → QA → HealthTech.
+ * The final segment always plays last and dwells before the splash dismisses.
  */
 export type BootStage = 'app' | 'engine' | 'scene' | 'shell'
 
@@ -135,7 +135,7 @@ export function bootStage(stage: BootStage | number) {
 }
 
 /**
- * Ensure all four segments click through evenly (Shell last) with a dwell.
+ * Ensure all four specialist segments click through evenly (HealthTech last) with a dwell.
  * Call when the multitool fast path is ready — never skip straight to bootDone().
  */
 export async function playShellAndDwell(): Promise<void> {
