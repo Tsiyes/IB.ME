@@ -763,7 +763,7 @@ export function createMultitool(
   let armedToolClick = false
   let reportedExpanded = false
 
-  const HOVER_DELAY_MS = 105 // was 140; ~25% snappier dwell before commit
+  const HOVER_DELAY_MS = 70 // was 140; ~25% snappier dwell before commit
   const DEPLOY_COOLDOWN_MS = 240 // was 320; matching 25% reduction
   const ACCORDION_CLICK_STEPS = Math.max(4, M - 1)
   const EXPAND_ON = 0.22

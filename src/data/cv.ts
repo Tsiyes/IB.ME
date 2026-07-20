@@ -50,7 +50,7 @@ export interface Credential {
 }
 
 export const profile = {
-  name: 'Isaac Bristow',
+  name: 'ISAAC BRISTOW',
   creds: 'BSc HONS',
   title: 'Implementation · Product · QA · Healthcare',
   statement:
