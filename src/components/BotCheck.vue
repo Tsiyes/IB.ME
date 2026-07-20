@@ -89,9 +89,10 @@ onMounted(() => {
   })
 })
 
-function pick(area: Area) {
+async function pick(area: Area) {
   if (phase.value === 'ok') return
-  unlockAudio()
+  // Must unlock inside this click — browsers block AudioContext until a gesture.
+  await unlockAudio()
   if (area.id === target.id) {
     phase.value = 'ok'
     playToolClick()

@@ -717,7 +717,8 @@ export function createMultitool(
 
   function playIntro() {
     if (introDone || introPlaying) return
-    unlockAudio()
+    // Audio must already be unlocked by the human-check click — browsers will
+    // not start AudioContext from this deferred path.
     if (preferReducedMotion()) {
       finishIntro()
       return
@@ -800,7 +801,6 @@ export function createMultitool(
 
   function onMove(e: PointerEvent) {
     if (showcaseMode) return
-    unlockAudio()
     stageHover = true
     const rect = canvas.getBoundingClientRect()
     pointer.set(
@@ -817,7 +817,6 @@ export function createMultitool(
   }
   function onEnter() {
     if (showcaseMode) return
-    unlockAudio()
     stageHover = true
   }
   function onLeave() {
@@ -827,7 +826,8 @@ export function createMultitool(
     parallaxTarget.set(0, 0)
   }
   function onPointerDown() {
-    unlockAudio()
+    // pointerdown is a real user gesture; pointermove is not.
+    void unlockAudio()
   }
 
   canvas.addEventListener('pointermove', onMove)
@@ -1070,7 +1070,8 @@ export function createMultitool(
     },
     setActiveArea(index: number | null) {
       if (!introDone || showcaseMode) return
-      unlockAudio()
+      // Legend clicks are gestures — unlock here if the gate was skipped somehow.
+      void unlockAudio()
       externalIndex = index
       if (index === null) requestIndex(-1)
       report()
