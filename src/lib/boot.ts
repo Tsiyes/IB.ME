@@ -122,19 +122,21 @@ function scheduleTick() {
 }
 
 /**
- * Report a real load milestone / kick the pacer.
- * Passing `'shell'` (or 4) means the multitool is ready — Shell may click.
+ * Report that the multitool fast path is ready (Shell may click).
+ * Intermediate milestones are ignored — lighting App early would stall the ring
+ * during Three.js parse. Use playShellAndDwell() for the even click sequence.
  */
 export function bootStage(stage: BootStage | number) {
-  claimSplash()
   const n = toIndex(stage)
-  if (stage === 'shell' || n >= 4) sceneReady = true
+  if (stage !== 'shell' && n < 4) return
+  claimSplash()
+  sceneReady = true
   scheduleTick()
 }
 
 /**
- * Ensure Shell is lit, click it if needed, and dwell so it reads before dismiss.
- * Call this when the multitool is ready — never skip straight to bootDone().
+ * Ensure all four segments click through evenly (Shell last) with a dwell.
+ * Call when the multitool fast path is ready — never skip straight to bootDone().
  */
 export async function playShellAndDwell(): Promise<void> {
   claimSplash()
@@ -142,19 +144,15 @@ export async function playShellAndDwell(): Promise<void> {
   clearTick()
   syncVisualFromDom()
 
-  // Catch up App/Engine/Loading quickly if we're behind, then Shell.
   if (preferReducedMotion()) {
     while (visual < 4) lightSegment(visual + 1)
     return
   }
 
-  while (visual < 3) {
+  // Even cadence for every segment now that the main-thread hitch is behind us.
+  while (visual < 4) {
     lightSegment(visual + 1)
-    await sleep(CADENCE_MS)
-  }
-
-  if (visual < 4) {
-    lightSegment(4)
+    if (visual < 4) await sleep(CADENCE_MS)
   }
   await sleep(SHELL_DWELL_MS)
   flushWaiters()

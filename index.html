@@ -107,7 +107,8 @@
         text-transform: uppercase;
         color: #7b8693;
       }
-      #ib-boot.is-done .boot-ring {
+      #ib-boot.is-done .boot-ring,
+      #ib-boot.is-paced .boot-ring {
         animation: none;
       }
       @keyframes ib-boot-spin {
@@ -169,16 +170,13 @@
         var root = document.getElementById('ib-boot')
         var status = document.getElementById('ib-boot-status')
         var segs = root ? root.querySelectorAll('.boot-seg') : []
-        // Pace App/Engine/Scene even while the main module is still parsing.
-        var PACE_MS = 520
-        var jsTakenOver = false
-        var paceTimer = null
 
         function paint(n) {
           var prev = stage
           stage = Math.max(stage, Math.min(4, n | 0))
           for (var i = 0; i < segs.length; i++) {
             if (i < stage) {
+              // Retrigger tick animation when a segment newly lights.
               if (i >= prev) {
                 segs[i].classList.remove('on')
                 void segs[i].offsetWidth
@@ -188,16 +186,13 @@
               segs[i].classList.remove('on')
             }
           }
+          // Spin only while indeterminate — stop once real segment clicks begin.
+          if (root) root.classList.toggle('is-paced', stage > 0)
           if (status) {
+            // Indeterminate until JS fills segments (avoids a stuck first click
+            // while Three.js parses on the main thread).
             status.textContent = stage > 0 ? labels[stage - 1] : 'Loading'
           }
-        }
-
-        function paceTick() {
-          if (jsTakenOver) return
-          // Hold at Loading until JS finishes the multitool (Shell plays last).
-          if (stage >= 3) return
-          paint(stage + 1)
         }
 
         function done() {
@@ -212,11 +207,6 @@
 
         window.__IB_BOOT = {
           set: function (s) {
-            jsTakenOver = true
-            if (paceTimer) {
-              clearInterval(paceTimer)
-              paceTimer = null
-            }
             if (typeof s === 'string') {
               var map = { app: 1, engine: 2, scene: 3, shell: 4 }
               paint(map[s] || stage)
@@ -230,10 +220,8 @@
           },
         }
 
+        // Spin only — segment clicks start after the fast scene path is ready.
         paint(0)
-        // First click soon, then even gaps through Scene while bundles parse.
-        paceTimer = setInterval(paceTick, PACE_MS)
-        setTimeout(paceTick, 50)
       })()
     </script>
     <script type="module" src="/src/main.ts"></script>

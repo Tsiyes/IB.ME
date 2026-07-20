@@ -4,7 +4,7 @@ import BotCheck from './components/BotCheck.vue'
 import GpuHint from './components/GpuHint.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
-import { bootDone, bootStage as setBootStage, playShellAndDwell } from './lib/boot'
+import { bootDone, playShellAndDwell } from './lib/boot'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const MOBILE_MQ = '(max-width: 820px)'
@@ -82,11 +82,12 @@ function onIntroComplete() {
 }
 async function onBootProgress(stage: number) {
   bootStage.value = Math.max(bootStage.value, stage)
-  if (stage >= 3) setBootStage('engine')
+  // Don't advance the ring on engine/scene milestones — that stalls mid-fill
+  // during Three.js parse. Only the fast-path completion plays the sequence.
   if (stage < 4) return
   if (bootReady.value) return
 
-  // Light Shell (never skip), dwell, then reveal the gate under the splash.
+  // Even App→Engine→Loading→Shell clicks, then reveal the gate under the splash.
   await playShellAndDwell()
   bootReady.value = true
   await nextTick()
@@ -117,6 +118,8 @@ function onScrollCue() {
 </script>
 
 <template>
+  <!-- Gate mounts only when the boot ring finishes AND choices are ready to click.
+       Scene stays hidden/inert until unlock so nothing looks interactive early. -->
   <Transition name="gate">
     <BotCheck v-if="bootReady && !unlocked" @passed="onUnlocked" />
   </Transition>
@@ -163,11 +166,10 @@ function onScrollCue() {
       </Transition>
     </div>
 
-    <!-- Desktop hover journey legend — omitted on mobile showcase. -->
+    <!-- Desktop hover journey legend — mount only once the hero is live. -->
     <nav
-      v-if="!isMobile"
-      class="legend"
-      :class="{ on: introDone }"
+      v-if="!isMobile && heroLive"
+      class="legend on"
       aria-label="Specialist areas"
     >
       <button
@@ -189,9 +191,9 @@ function onScrollCue() {
     </nav>
 
     <button
+      v-if="heroLive"
       type="button"
-      class="scroll-cue"
-      :class="{ on: introDone }"
+      class="scroll-cue on"
       @click="onScrollCue"
     >
       <span class="mono">{{ isMobile ? 'About me' : 'Specialisms' }}</span>
