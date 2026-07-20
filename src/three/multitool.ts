@@ -462,7 +462,7 @@ export function createMultitool(
       { text: sanitize(profile.name, boldGlyphs), size: 0.26, y: 0.12, font: boldFont },
       { text: sanitize(profile.creds, boldGlyphs), size: 0.092, y: -0.14, font: boldFont },
       {
-        text: sanitize('IMPLEMENTATION / PRODUCT / QA / HEALTHCARE', mediumGlyphs),
+        text: sanitize('IMPLEMENTATION / PRODUCT / QA / HEALTHTECH', mediumGlyphs),
         size: 0.092,
         y: -0.32,
         font: mediumFont,

@@ -52,9 +52,9 @@ export interface Credential {
 export const profile = {
   name: 'ISAAC BRISTOW',
   creds: 'BSc HONS',
-  title: 'Implementation · Product · QA · Healthcare',
+  title: 'Implementation · Product · QA · HealthTech',
   statement:
-    'Resilient, self-directed, pressure-motivated. Preference for high-intensity, high-reward environments. Individually, I find satisfaction delivering creative solutions via a diverse and expanding toolset; collaboratively, multi-disciplinary co-ordination and radical candour drive success in the projects I lead and contribute to.',
+    'Resilient, self-directed, pressure-motivated. Preference for high-intensity, high-reward environments. Individually, I find satisfaction delivering creative solutions via a diverse and expanding toolset; collaboratively, multi-disciplinary co-ordination and radical candour drive success in the projects within which I lead and contribute.',
 }
 
 export const contact = {
@@ -73,7 +73,7 @@ export const areas: Area[] = [
     tool: 'driver',
     tagline: 'Building & integrating systems',
     blurb:
-      'Interfacing & integration engineering across healthcare platforms — from console applications to cloud infrastructure, increasingly augmented with LLM/agentic workflows.',
+      'Interfacing & integration engineering across healthcare platforms and with a variety of providers.',
     skills: [
       'VueJS',
       'C#',
@@ -94,8 +94,12 @@ export const areas: Area[] = [
           'Founding member and key contributor to a next-generation Laboratory Information Management System.',
       },
       {
+        title: 'Digital Pathology',
+        detail: 'Designed and delivered the interface and LIMS integration that now fascilitates 46% and growing of the UK’s NCL Digital Pathology throughput.',
+      },
+      {
         title: 'Automated QA',
-        detail: 'End-to-end and integration test suites with Cypress + Mochawesome reporting.',
+        detail: 'End-to-end and integration test suites with Cypress + Mochawesome reporting, tracability matrix backed to requirements and specifications.',
       },
     ],
     accent: '#ff5f59',
@@ -163,19 +167,19 @@ export const areas: Area[] = [
     accent: '#e0a85c',
   },
   {
-    id: 'healthcare',
+    id: 'healthtech',
     code: '04',
-    label: 'Healthcare',
+    label: 'HealthTech',
     toolName: 'Scalpel',
     tool: 'scalpel',
     tagline: 'The scientific foundation',
     blurb:
-      'A molecular and cellular pathology background contextualises the work I do in healthcare software, and informs the decisions I make in product and implementation.',
+      'A molecular and cellular pathology background contextualises the work I do in healthtech, and informs the decisions I make in product and implementation.',
     skills: [
       'Molecular Biology',
       'Cellular Pathology',
       'Assay Validation / Verification',
-      'HL7 / Healthcare Interfacing',
+      'HL7 / Analyser Interfacing',
       'Roche',
       'Leica',
       'CE Marking',
