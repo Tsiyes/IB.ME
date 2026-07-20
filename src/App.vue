@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BotCheck from './components/BotCheck.vue'
+import GpuHint from './components/GpuHint.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
+import { bootStage as setBootStage } from './lib/boot'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const MOBILE_MQ = '(max-width: 820px)'
@@ -14,6 +16,8 @@ const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
+/** Mirrors the 4-part boot ring: shell=1 … scene=4. */
+const bootStage = ref(2)
 const isMobile = ref(
   typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches,
 )
@@ -74,6 +78,11 @@ function onExpandChange(isExpanded: boolean) {
 function onIntroComplete() {
   introDone.value = true
 }
+function onBootProgress(stage: number) {
+  bootStage.value = Math.max(bootStage.value, stage)
+  if (stage >= 3) setBootStage('engine')
+  if (stage >= 4) setBootStage('scene')
+}
 function hoverLegend(index: number | null) {
   if (isMobile.value) return
   forceArea.value = index
@@ -97,8 +106,10 @@ function onScrollCue() {
 
 <template>
   <Transition name="gate">
-    <BotCheck v-if="!unlocked" @passed="onUnlocked" />
+    <BotCheck v-if="!unlocked" :boot-stage="bootStage" @passed="onUnlocked" />
   </Transition>
+
+  <GpuHint v-if="unlocked" />
 
   <!-- Scene mounts immediately (under the gate) so WebGL warms during the check. -->
   <section
@@ -114,6 +125,7 @@ function onScrollCue() {
       @area-change="onAreaChange"
       @expand-change="onExpandChange"
       @intro-complete="onIntroComplete"
+      @boot-progress="onBootProgress"
     />
 
     <!-- Identity is engraved on the tool's face plate; this heading is for

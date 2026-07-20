@@ -9,6 +9,7 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import robotoBold from '../assets/fonts/RobotoMono-Bold.typeface.json'
 import robotoMedium from '../assets/fonts/RobotoMono-Medium.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
+import { probeGpu } from '../lib/gpu'
 import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
 
 // -----------------------------------------------------------------------------
@@ -249,8 +250,17 @@ export function createMultitool(
   canvas: HTMLCanvasElement,
   options: MultitoolOptions = {},
 ): Multitool {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const gpu = probeGpu()
+  const softGl = gpu.softwareLikely || gpu.majorCaveat
+
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: !softGl,
+    alpha: true,
+    powerPreference: softGl ? 'low-power' : 'high-performance',
+  })
+  // Software GL pays dearly for HiDPI + MSAA; keep the frame budget for motion.
+  renderer.setPixelRatio(softGl ? 1 : Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   // Slightly lower exposure so raking keys can keep contrast on the frontal face.
   renderer.toneMappingExposure = 1.05
@@ -258,7 +268,8 @@ export function createMultitool(
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
   // Tighter blur → sharper env reflections on polymer bevels / clearcoat.
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.015).texture
+  // Softer / cheaper blur on software renderers (PMREM is a sync hitch).
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), softGl ? 0.08 : 0.015).texture
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
   // Frame the tool in the upper-centre of the hero; look slightly below it so

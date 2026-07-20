@@ -24,6 +24,23 @@ function htmlCacheBust(): Plugin {
 export default defineConfig({
   base: process.env.BASE_PATH || '/',
   plugins: [vue(), htmlCacheBust()],
+  build: {
+    rollupOptions: {
+      output: {
+        // Keep Three (+ CSG helpers) in a dedicated async chunk so the shell /
+        // BotCheck can paint while the WebGL stack downloads + parses.
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/three') ||
+            id.includes('node_modules/three-bvh-csg') ||
+            id.includes('node_modules/three-mesh-bvh')
+          ) {
+            return 'three'
+          }
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5173,
