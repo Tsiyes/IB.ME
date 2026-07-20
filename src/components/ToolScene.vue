@@ -34,27 +34,35 @@ onMounted(() => {
   void (async () => {
     // Download Three in parallel with the boot ring; createMultitool is now a
     // fast path (PMREM + CSG engraving deferred).
-    const { createMultitool } = await import('../three/multitool')
-    if (cancelled) return
-    emit('boot-progress', 3)
+    try {
+      const { createMultitool } = await import('../three/multitool')
+      if (cancelled) return
+      emit('boot-progress', 3)
 
-    tool = createMultitool(el, {
-      showcaseMode: props.showcaseMode,
-      onAreaChange: (id) => emit('area-change', id),
-      onExpandChange: (expanded) => emit('expand-change', expanded),
-      onIntroComplete: () => emit('intro-complete'),
-    })
-    if (cancelled) {
-      tool.dispose()
-      tool = null
-      return
+      tool = createMultitool(el, {
+        showcaseMode: props.showcaseMode,
+        onAreaChange: (id) => emit('area-change', id),
+        onExpandChange: (expanded) => emit('expand-change', expanded),
+        onIntroComplete: () => emit('intro-complete'),
+      })
+      if (cancelled) {
+        tool.dispose()
+        tool = null
+        return
+      }
+
+      observer = new ResizeObserver(() => tool?.resize())
+      if (el.parentElement) observer.observe(el.parentElement)
+
+      if (props.runIntro) tool.playIntro()
+    } catch (err) {
+      // Still finish the boot ring — document + human check must remain usable
+      // even when WebGL is unavailable (headless, blocked GPU, etc.).
+      console.warn('[ToolScene] multitool failed to start', err)
+      emit('intro-complete')
+    } finally {
+      if (!cancelled) emit('boot-progress', 4)
     }
-
-    observer = new ResizeObserver(() => tool?.resize())
-    if (el.parentElement) observer.observe(el.parentElement)
-
-    emit('boot-progress', 4)
-    if (props.runIntro) tool.playIntro()
   })()
 })
 

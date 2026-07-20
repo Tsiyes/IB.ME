@@ -166,9 +166,9 @@ function onScrollCue() {
       </Transition>
     </div>
 
-    <!-- Desktop hover journey legend — mount only once intro makes it usable. -->
+    <!-- Desktop hover journey legend — mount only once the hero is live. -->
     <nav
-      v-if="!isMobile && introDone"
+      v-if="!isMobile && heroLive"
       class="legend on"
       aria-label="Specialist areas"
     >
@@ -191,7 +191,7 @@ function onScrollCue() {
     </nav>
 
     <button
-      v-if="introDone"
+      v-if="heroLive"
       type="button"
       class="scroll-cue on"
       @click="onScrollCue"
