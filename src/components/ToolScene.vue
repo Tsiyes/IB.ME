@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { whenBootVisualAtLeast } from '../lib/boot'
 import type { Multitool } from '../three/multitool'
 
 const props = defineProps<{
@@ -30,11 +31,11 @@ onMounted(() => {
   const el = canvas.value
 
   void (async () => {
-    // Let the boot ring paint a frame before we pull Three.js.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    // Let App → Engine → Scene click through at an even pace before we pull
+    // Three.js (its parse blocks the main thread and would freeze the ring).
+    await whenBootVisualAtLeast(3, 1800)
     if (cancelled) return
 
-    // Dynamic import keeps the initial shell off the Three.js chunk.
     const { createMultitool } = await import('../three/multitool')
     if (cancelled) return
     emit('boot-progress', 3)

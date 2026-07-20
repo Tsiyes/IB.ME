@@ -2,12 +2,20 @@
 
 import { playAccordionClick } from '../three/sfx'
 
-export type BootStage = 'shell' | 'app' | 'engine' | 'scene'
+/**
+ * Real load milestones (reported by the app). Visual order is different:
+ * App → Engine → Loading → Shell — Shell plays last so the long warm-up wait
+ * isn't spent staring at the first segment. The third slot is labeled Loading
+ * because that is where we hold while Three.js parses.
+ */
+export type BootStage = 'app' | 'engine' | 'scene' | 'shell'
 
-const ORDER: BootStage[] = ['shell', 'app', 'engine', 'scene']
+const ORDER: BootStage[] = ['app', 'engine', 'scene', 'shell']
 
-/** Minimum time between segment clicks so each tick reads clearly. */
-const SEG_MS = 170
+/** Equal cadence between segment clicks (feels even regardless of real I/O). */
+const CADENCE_MS = 450
+/** Slightly slower while the scene is still warming — keeps early clicks from dumping. */
+const WARMUP_CADENCE_MS = 520
 
 type BootApi = {
   set: (stage: BootStage | number) => void
@@ -21,13 +29,21 @@ declare global {
   }
 }
 
-let target = 0
-let shown = 0
+/** True once the multitool scene has finished constructing (unlocks Shell). */
+let sceneReady = false
+/** Segments lit on the splash (1–4). Driven by the pacer, not raw I/O. */
+let visual = 0
 let tickTimer: ReturnType<typeof setTimeout> | null = null
 const catchUpWaiters: Array<() => void> = []
 
 function api(): BootApi | undefined {
   return typeof window !== 'undefined' ? window.__IB_BOOT : undefined
+}
+
+/** Adopt progress the inline HTML pacer may have already painted. */
+function syncVisualFromDom() {
+  const dom = api()?.stage ?? 0
+  if (dom > visual) visual = dom
 }
 
 function toIndex(stage: BootStage | number): number {
@@ -40,44 +56,78 @@ function preferReducedMotion(): boolean {
 }
 
 function flushWaiters() {
-  if (shown < target) return
+  if (visual < 4) return
   const waiters = catchUpWaiters.splice(0, catchUpWaiters.length)
   for (const w of waiters) w()
 }
 
-function tick() {
+/** First three can pace ahead of I/O; Shell (4) waits for the real scene. */
+function allowedMax(): number {
+  return sceneReady ? 4 : 3
+}
+
+function clearTick() {
+  if (tickTimer != null) {
+    clearTimeout(tickTimer)
+    tickTimer = null
+  }
+}
+
+function lightNext() {
   tickTimer = null
-  if (shown >= target) {
+  if (visual >= allowedMax()) {
     flushWaiters()
     return
   }
-  shown += 1
-  api()?.set(shown)
-  playAccordionClick(shown - 1, 0)
+  visual += 1
+  api()?.set(visual)
+  playAccordionClick(visual - 1, 0)
+  if (visual >= 4) {
+    flushWaiters()
+    return
+  }
   scheduleTick()
 }
 
 function scheduleTick() {
+  syncVisualFromDom()
   if (tickTimer != null) return
-  if (shown >= target) {
+  if (visual >= allowedMax()) {
     flushWaiters()
     return
   }
-  // First segment snaps on immediately; later ones click in with a short gap.
-  const delay = shown === 0 || preferReducedMotion() ? 0 : SEG_MS
-  tickTimer = setTimeout(tick, delay)
+  if (preferReducedMotion()) {
+    while (visual < allowedMax()) {
+      visual += 1
+      api()?.set(visual)
+    }
+    flushWaiters()
+    return
+  }
+  // Even cadence: first click almost immediately, then steady gaps.
+  // Warm-up cadence paces App/Engine/Scene; Shell uses the standard gap after ready.
+  const delay = visual === 0 ? 50 : sceneReady ? CADENCE_MS : WARMUP_CADENCE_MS
+  tickTimer = setTimeout(lightNext, delay)
 }
 
-/** Advance the 4-part boot ring (shell → app → engine → scene), clicking each new segment. */
+/**
+ * Report a real load milestone / kick the pacer.
+ * Visual order is App → Engine → Scene → Shell. Passing `'shell'` (or 4)
+ * means the multitool is ready and the final Shell click may play.
+ */
 export function bootStage(stage: BootStage | number) {
-  target = Math.max(target, toIndex(stage))
+  syncVisualFromDom()
+  // Claim the splash so the inline HTML interval stops (JS owns pacing now).
+  api()?.set(visual)
+  const n = toIndex(stage)
+  if (stage === 'shell' || n >= 4) sceneReady = true
   scheduleTick()
 }
 
-/** Resolves once the ring has clicked through every currently targeted segment. */
+/** Resolves once all four visual segments (ending on Shell) have clicked through. */
 export function whenBootCaughtUp(): Promise<void> {
   return new Promise((resolve) => {
-    if (shown >= target && target > 0) {
+    if (visual >= 4) {
       resolve()
       return
     }
@@ -86,8 +136,26 @@ export function whenBootCaughtUp(): Promise<void> {
   })
 }
 
+/** Resolves once the splash has painted at least `n` segments (or `timeoutMs`). */
+export function whenBootVisualAtLeast(n: number, timeoutMs = 2000): Promise<void> {
+  return new Promise((resolve) => {
+    const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now()
+    const tick = () => {
+      syncVisualFromDom()
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      if (visual >= n || (api()?.stage ?? 0) >= n || now - t0 >= timeoutMs) {
+        resolve()
+        return
+      }
+      setTimeout(tick, 40)
+    }
+    tick()
+  })
+}
+
 /** Fade out and remove the inline splash. */
 export function bootDone() {
+  clearTick()
   api()?.done()
 }
 
@@ -96,5 +164,5 @@ export function bootIndex(stage: BootStage): number {
 }
 
 export function currentBootStage(): number {
-  return api()?.stage ?? shown
+  return api()?.stage ?? visual
 }

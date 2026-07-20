@@ -18,8 +18,8 @@ const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
-/** Mirrors the 4-part boot ring: shell=1 … scene=4. */
-const bootStage = ref(2)
+/** Mirrors visual boot segments lit (App…Shell). */
+const bootStage = ref(0)
 const isMobile = ref(
   typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches,
 )
@@ -85,9 +85,9 @@ async function onBootProgress(stage: number) {
   if (stage >= 3) setBootStage('engine')
   if (stage < 4) return
 
-  setBootStage('scene')
+  // Multitool ready — unlock the final Shell click on the paced ring.
+  setBootStage('shell')
   if (bootReady.value) return
-  // Let every segment click through, then present the human check and dismiss.
   await whenBootCaughtUp()
   bootReady.value = true
   await nextTick()
