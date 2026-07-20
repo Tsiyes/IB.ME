@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BotCheck from './components/BotCheck.vue'
 import GpuHint from './components/GpuHint.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
-import { bootStage as setBootStage } from './lib/boot'
+import { bootDone, bootStage as setBootStage, whenBootCaughtUp } from './lib/boot'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const MOBILE_MQ = '(max-width: 820px)'
 
 const unlocked = ref(false)
+/** True once the 4-part boot ring has finished and the human check may show. */
+const bootReady = ref(false)
 const introDone = ref(false)
 const expanded = ref(false)
 const activeId = ref<string | null>(null)
@@ -78,10 +80,19 @@ function onExpandChange(isExpanded: boolean) {
 function onIntroComplete() {
   introDone.value = true
 }
-function onBootProgress(stage: number) {
+async function onBootProgress(stage: number) {
   bootStage.value = Math.max(bootStage.value, stage)
   if (stage >= 3) setBootStage('engine')
-  if (stage >= 4) setBootStage('scene')
+  if (stage < 4) return
+
+  setBootStage('scene')
+  if (bootReady.value) return
+  // Let every segment click through, then present the human check and dismiss.
+  await whenBootCaughtUp()
+  bootReady.value = true
+  await nextTick()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  bootDone()
 }
 function hoverLegend(index: number | null) {
   if (isMobile.value) return
@@ -106,12 +117,12 @@ function onScrollCue() {
 
 <template>
   <Transition name="gate">
-    <BotCheck v-if="!unlocked" :boot-stage="bootStage" @passed="onUnlocked" />
+    <BotCheck v-if="bootReady && !unlocked" @passed="onUnlocked" />
   </Transition>
 
   <GpuHint v-if="unlocked" />
 
-  <!-- Scene mounts immediately (under the gate) so WebGL warms during the check. -->
+  <!-- Scene mounts under the boot splash so WebGL warms before the human check. -->
   <section
     class="hero"
     :class="{ showcase: isMobile }"

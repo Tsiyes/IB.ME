@@ -1,14 +1,12 @@
 import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
-import { bootDone, bootStage } from './lib/boot'
+import { bootStage } from './lib/boot'
 
+// Stage 1 was painted by the inline HTML shell; re-assert + click as modules start.
 bootStage('shell')
 
-const app = createApp(App)
-app.mount('#app')
+createApp(App).mount('#app')
 
-// Vue + BotCheck are interactive; dismiss the splash so the gate can take over.
-// Three.js continues loading under the gate (engine → scene stages).
+// Vue shell is up; Three.js still loading under the splash. Keep #ib-boot until scene.
 bootStage('app')
-bootDone()

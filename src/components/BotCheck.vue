@@ -6,11 +6,6 @@ import { playToolClick, unlockAudio } from '../three/sfx'
 
 const emit = defineEmits<{ passed: [] }>()
 
-defineProps<{
-  /** How many of the four boot segments are complete (1–4). */
-  bootStage?: number
-}>()
-
 function shuffle<T>(list: T[]): T[] {
   const out = [...list]
   for (let i = out.length - 1; i > 0; i--) {
@@ -80,14 +75,14 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 
 const target = areas[Math.floor(Math.random() * areas.length)]
-const choices = ref<Area[]>([])
+// Shuffle eagerly so the gate is interactable the instant it mounts.
+const choices = ref<Area[]>(shuffle(areas))
 const phase = ref<'ask' | 'wrong' | 'ok'>('ask')
 const shake = ref(false)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
 
 onMounted(() => {
-  choices.value = shuffle(areas)
   void recordVisit().then((snap) => {
     visits.value = snap.visits
     botsBounced.value = snap.botsBounced
@@ -148,56 +143,6 @@ function pick(area: Area) {
         <span v-else-if="phase === 'ok'">Unlocked. Welcome in.</span>
         <span v-else>&nbsp;</span>
       </p>
-
-      <!-- Continues the HTML boot ring while Three.js warms under the gate. -->
-      <div
-        class="boot-meter"
-        :class="{ ready: (bootStage ?? 0) >= 4 }"
-        aria-hidden="true"
-      >
-        <svg class="boot-ring" viewBox="0 0 72 72">
-          <circle
-            class="boot-seg"
-            :class="{ on: (bootStage ?? 0) >= 1 }"
-            data-i="1"
-            cx="36"
-            cy="36"
-            r="28"
-            stroke-dasharray="36 140"
-            stroke-dashoffset="0"
-          />
-          <circle
-            class="boot-seg"
-            :class="{ on: (bootStage ?? 0) >= 2 }"
-            data-i="2"
-            cx="36"
-            cy="36"
-            r="28"
-            stroke-dasharray="36 140"
-            stroke-dashoffset="-44"
-          />
-          <circle
-            class="boot-seg"
-            :class="{ on: (bootStage ?? 0) >= 3 }"
-            data-i="3"
-            cx="36"
-            cy="36"
-            r="28"
-            stroke-dasharray="36 140"
-            stroke-dashoffset="-88"
-          />
-          <circle
-            class="boot-seg"
-            :class="{ on: (bootStage ?? 0) >= 4 }"
-            data-i="4"
-            cx="36"
-            cy="36"
-            r="28"
-            stroke-dasharray="36 140"
-            stroke-dashoffset="-132"
-          />
-        </svg>
-      </div>
 
       <p class="tally mono" aria-live="polite">
         <span>Visits {{ formatCount(visits) }}</span>
@@ -325,43 +270,6 @@ h2 {
   font-size: 0.72rem;
   letter-spacing: 0.04em;
   color: var(--ink-soft);
-}
-
-.boot-meter {
-  display: grid;
-  place-items: center;
-  margin: 4px 0 0;
-  opacity: 0.85;
-  transition: opacity 280ms ease;
-}
-.boot-meter.ready {
-  opacity: 0.35;
-}
-.boot-ring {
-  width: 40px;
-  height: 40px;
-  transform: rotate(-90deg);
-}
-.boot-seg {
-  fill: none;
-  stroke-width: 5;
-  stroke: rgba(18, 24, 31, 0.1);
-  transition: stroke 220ms ease;
-}
-.boot-seg.on {
-  stroke-opacity: 1;
-}
-.boot-seg[data-i='1'].on {
-  stroke: #ff5f59;
-}
-.boot-seg[data-i='2'].on {
-  stroke: #2f9e8f;
-}
-.boot-seg[data-i='3'].on {
-  stroke: #e0a85c;
-}
-.boot-seg[data-i='4'].on {
-  stroke: #c96b8c;
 }
 
 .tally {

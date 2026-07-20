@@ -30,13 +30,11 @@ onMounted(() => {
   const el = canvas.value
 
   void (async () => {
-    // Let BotCheck / the boot ring paint a frame before we pull Three.js.
-    // Otherwise cold parse of the ~675kB chunk can block the first gate paint.
-    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    // Let the boot ring paint a frame before we pull Three.js.
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     if (cancelled) return
 
-    // Dynamic import keeps the initial shell (BotCheck) off the Three.js chunk.
+    // Dynamic import keeps the initial shell off the Three.js chunk.
     const { createMultitool } = await import('../three/multitool')
     if (cancelled) return
     emit('boot-progress', 3)
