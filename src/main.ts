@@ -1,9 +1,7 @@
 import { createApp } from 'vue'
 import './style.css'
 import App from './App.vue'
-import { bootStage } from './lib/boot'
 
 createApp(App).mount('#app')
-
-// Kick / continue the paced ring (App → Engine → Loading → Shell).
-bootStage('app')
+// Boot ring stays indeterminate until the multitool fast path finishes;
+// App.vue then runs playShellAndDwell() for an even App→Shell click sequence.

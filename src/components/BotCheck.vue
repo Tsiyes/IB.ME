@@ -119,7 +119,13 @@ function pick(area: Area) {
         <span class="tool-name" :style="{ color: target.accent }">{{ target.toolName }}</span>
       </h2>
 
-      <div class="choices" role="group" aria-label="Tool choices">
+      <!-- Never render choice tiles until the full set is ready to click. -->
+      <div
+        v-if="choices.length === areas.length"
+        class="choices"
+        role="group"
+        aria-label="Tool choices"
+      >
         <button
           v-for="area in choices"
           :key="area.id"

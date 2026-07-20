@@ -267,9 +267,14 @@ export function createMultitool(
 
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
-  // Tighter blur → sharper env reflections on polymer bevels / clearcoat.
-  // Softer / cheaper blur on software renderers (PMREM is a sync hitch).
-  scene.environment = pmrem.fromScene(new RoomEnvironment(), softGl ? 0.08 : 0.015).texture
+  // Defer PMREM — sync fromScene() was a multi-hundred-ms hitch on the boot path.
+  // Canvas stays hidden until unlock, so metals can enrich before the user sees them.
+  let envReady = false
+  function bakeEnvironment() {
+    if (!running || envReady) return
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), softGl ? 0.08 : 0.015).texture
+    envReady = true
+  }
 
   const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 100)
   // Frame the tool in the upper-centre of the hero; look slightly below it so
@@ -369,8 +374,7 @@ export function createMultitool(
   const back = makeScale(-0.52)
   pickTargets.push(back.mesh)
 
-  // ---- front cover: Roboto Mono cut as a dark recessed engrave ----
-  // One CSG pass; fonts are bundled typeface JSON (not runtime TTF).
+  // ---- front cover: plain polymer first; CSG engrave deferred off the boot path ----
   const inkMat = new THREE.MeshStandardMaterial({
     color: 0xfdcb93,
     metalness: 0.12,
@@ -379,16 +383,6 @@ export function createMultitool(
   })
   disposables.push(inkMat)
   const RECESS = 0.07
-
-  const loader = new FontLoader()
-  const boldFont = loader.parse(robotoBold as unknown as Parameters<FontLoader['parse']>[0])
-  const mediumFont = loader.parse(robotoMedium as unknown as Parameters<FontLoader['parse']>[0])
-  const boldGlyphs = (boldFont.data as { glyphs: Record<string, unknown> }).glyphs
-  const mediumGlyphs = (mediumFont.data as { glyphs: Record<string, unknown> }).glyphs
-  const sanitize = (text: string, glyphs: Record<string, unknown>) =>
-    Array.from(text)
-      .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
-      .join('')
 
   const frontShape = panelShape(HANDLE_L, HANDLE_H)
   addPinHoles(frontShape)
@@ -403,99 +397,108 @@ export function createMultitool(
   })
   frontGeo.translate(0, 0, -SCALE_D / 2)
   frontGeo.computeBoundingBox()
-  // Actual front surface of the cover (accounts for the bevel), so the cut is
-  // guaranteed to open at the surface and recess RECESS deep.
   const surfaceZ = frontGeo.boundingBox!.max.z
   const cutterDepth = RECESS + 0.06
 
-  const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
-    { text: sanitize(profile.name, boldGlyphs), 
-      size: 0.26, 
-      y: 0.12, 
-      font: boldFont },
-    { text: sanitize(profile.creds, boldGlyphs), 
-      size: 0.092, 
-      y: -0.14, 
-      font: boldFont },
-    {
-      text: sanitize('IMPLEMENTATION / PRODUCT / QA / HEALTHCARE', mediumGlyphs),
-      size: 0.092,
-      y: -0.32,
-      font: mediumFont,
-    },
-    {
-      text: sanitize(contact.email, mediumGlyphs),
-      size: 0.07,
-      y: -0.46,
-      font: mediumFont,
-    },
-  ].filter((line) => line.text.length > 0)
-
-  // Layout helpers: centre each line on X, then centre the whole block on Y so the
-  // lettering sits optically in the middle of the plate between the rods.
-  function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
-    return lines.map((line) => {
-      const geo = new TextGeometry(line.text, {
-        font: line.font,
-        size: line.size,
-        depth,
-        // Roboto Mono outlines are denser than Helvetiker; 2 keeps CSG in the
-        // same ballpark as the responsive Helvetiker@4 baseline.
-        curveSegments: 2,
-        bevelEnabled: false,
-      })
-      geo.computeBoundingBox()
-      const bb = geo.boundingBox!
-      const cx = (bb.max.x + bb.min.x) / 2
-      geo.translate(-cx, line.y, z)
-      return geo
-    })
-  }
-
-  function centreBlockY(geos: THREE.BufferGeometry[]) {
-    let minY = Infinity
-    let maxY = -Infinity
-    for (const geo of geos) {
-      geo.computeBoundingBox()
-      const bb = geo.boundingBox!
-      minY = Math.min(minY, bb.min.y)
-      maxY = Math.max(maxY, bb.max.y)
-    }
-    const cy = (minY + maxY) / 2
-    for (const geo of geos) geo.translate(0, -cy, 0)
-  }
-
-  const cutterGeos = layoutTextGeos(cutterDepth, surfaceZ - RECESS)
-  centreBlockY(cutterGeos)
-  const cutterGeo = mergeGeometries(cutterGeos, false)!
-  cutterGeos.forEach((g) => g.dispose())
-
-  // CSG requires indexed geometry. If anything goes wrong, fall back to a plain
-  // (un-engraved) cover so the scene still renders.
-  let frontMesh: THREE.Mesh
-  try {
-    const scaleBrush = new Brush(mergeVertices(frontGeo), scaleMat)
-    const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
-    const evaluator = new Evaluator()
-    evaluator.useGroups = true
-    const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-    // Group 0 = polymer scale; group 1 = dark inked cavity walls/floor.
-    result.material = [scaleMat, inkMat]
-    frontMesh = result
-  } catch (err) {
-    console.warn('[multitool] engraving CSG failed, using plain cover', err)
-    frontMesh = new THREE.Mesh(frontGeo.clone(), scaleMat)
-  }
-  frontGeo.dispose()
-  cutterGeo.dispose()
-  disposables.push(frontMesh.geometry)
-
+  // Instant plain cover so createMultitool can return before the CSG hit.
+  let frontMesh: THREE.Mesh = new THREE.Mesh(frontGeo, scaleMat)
   const frontGroup = new THREE.Group()
   frontGroup.position.z = 0.52
   frontGroup.add(frontMesh)
   assembly.add(frontGroup)
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
   pickTargets.push(frontMesh)
+
+  let engraved = false
+  function engraveFront() {
+    if (!running || engraved) return
+    engraved = true
+
+    const loader = new FontLoader()
+    const boldFont = loader.parse(robotoBold as unknown as Parameters<FontLoader['parse']>[0])
+    const mediumFont = loader.parse(robotoMedium as unknown as Parameters<FontLoader['parse']>[0])
+    const boldGlyphs = (boldFont.data as { glyphs: Record<string, unknown> }).glyphs
+    const mediumGlyphs = (mediumFont.data as { glyphs: Record<string, unknown> }).glyphs
+    const sanitize = (text: string, glyphs: Record<string, unknown>) =>
+      Array.from(text)
+        .map((c) => (c === ' ' || glyphs[c] ? c : glyphs[c.toUpperCase()] ? c.toUpperCase() : '-'))
+        .join('')
+
+    const lines: Array<{ text: string; size: number; y: number; font: Font }> = [
+      { text: sanitize(profile.name, boldGlyphs), size: 0.26, y: 0.12, font: boldFont },
+      { text: sanitize(profile.creds, boldGlyphs), size: 0.092, y: -0.14, font: boldFont },
+      {
+        text: sanitize('IMPLEMENTATION / PRODUCT / QA / HEALTHCARE', mediumGlyphs),
+        size: 0.092,
+        y: -0.32,
+        font: mediumFont,
+      },
+      {
+        text: sanitize(contact.email, mediumGlyphs),
+        size: 0.07,
+        y: -0.46,
+        font: mediumFont,
+      },
+    ].filter((line) => line.text.length > 0)
+
+    function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
+      return lines.map((line) => {
+        const geo = new TextGeometry(line.text, {
+          font: line.font,
+          size: line.size,
+          depth,
+          curveSegments: 2,
+          bevelEnabled: false,
+        })
+        geo.computeBoundingBox()
+        const bb = geo.boundingBox!
+        const cx = (bb.max.x + bb.min.x) / 2
+        geo.translate(-cx, line.y, z)
+        return geo
+      })
+    }
+
+    function centreBlockY(geos: THREE.BufferGeometry[]) {
+      let minY = Infinity
+      let maxY = -Infinity
+      for (const geo of geos) {
+        geo.computeBoundingBox()
+        const bb = geo.boundingBox!
+        minY = Math.min(minY, bb.min.y)
+        maxY = Math.max(maxY, bb.max.y)
+      }
+      const cy = (minY + maxY) / 2
+      for (const geo of geos) geo.translate(0, -cy, 0)
+    }
+
+    const cutterGeos = layoutTextGeos(cutterDepth, surfaceZ - RECESS)
+    centreBlockY(cutterGeos)
+    const cutterGeo = mergeGeometries(cutterGeos, false)
+    cutterGeos.forEach((g) => g.dispose())
+    if (!cutterGeo) return
+
+    try {
+      const scaleBrush = new Brush(mergeVertices(frontGeo.clone()), scaleMat)
+      const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
+      const evaluator = new Evaluator()
+      evaluator.useGroups = true
+      const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
+      result.material = [scaleMat, inkMat]
+
+      const pickIdx = pickTargets.indexOf(frontMesh)
+      frontGroup.remove(frontMesh)
+      // frontGeo still held for disposal below; plain mesh used it directly.
+      frontMesh = result
+      frontGroup.add(frontMesh)
+      if (pickIdx >= 0) pickTargets[pickIdx] = frontMesh
+      else pickTargets.push(frontMesh)
+      disposables.push(frontMesh.geometry)
+    } catch (err) {
+      console.warn('[multitool] engraving CSG failed, keeping plain cover', err)
+    } finally {
+      cutterGeo.dispose()
+    }
+  }
 
   // ---- pivot + end pins (rods) ----
   // Position via mesh.position (not baked geo translate) so the intro can
@@ -1022,9 +1025,31 @@ export function createMultitool(
   // of the assembled tool under the bot-check gate.
   applyIntro(performance.now())
 
+  // Heavy enrichment after the boot path returns — keeps the load ring moving
+  // and lets the human check appear while PMREM + CSG finish under the splash.
+  disposables.push(frontGeo)
+  let enrichTimer = 0
+  const enrichDetails = () => {
+    if (!running) return
+    bakeEnvironment()
+    engraveFront()
+  }
+  enrichTimer = window.setTimeout(() => {
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
+    }
+    if (w.requestIdleCallback) w.requestIdleCallback(() => enrichDetails(), { timeout: 900 })
+    else enrichDetails()
+  }, 0)
+
   return {
     resize,
-    playIntro,
+    playIntro: () => {
+      // Guarantee materials/engraving before the user-facing intro — usually
+      // already done while they completed the human check.
+      enrichDetails()
+      playIntro()
+    },
     setShowcaseMode(on: boolean) {
       showcaseMode = on
       if (on) {
@@ -1052,6 +1077,7 @@ export function createMultitool(
     },
     dispose() {
       running = false
+      window.clearTimeout(enrichTimer)
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerenter', onEnter)
       canvas.removeEventListener('pointerleave', onLeave)
