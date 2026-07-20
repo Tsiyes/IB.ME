@@ -36,11 +36,8 @@ if (!existsSync(htmlPath)) {
   if (!html.includes('>IB.ME</title>') && !html.includes('<title>IB.ME</title>')) {
     fail('dist/index.html title should be IB.ME')
   }
-  if (!html.includes('id="ib-boot"')) {
-    fail('dist/index.html missing #ib-boot loading shell')
-  }
-  if (!html.includes('__IB_BOOT')) {
-    fail('dist/index.html missing __IB_BOOT boot bridge')
+  if (html.includes('id="ib-boot"') || html.includes('__IB_BOOT')) {
+    fail('dist/index.html still contains the removed boot splash')
   }
   if (!html.includes('favicon.svg')) {
     fail('dist/index.html missing favicon.svg link')

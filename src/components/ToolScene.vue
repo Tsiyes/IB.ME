@@ -11,15 +11,13 @@ const props = defineProps<{
    * hero is a self-contained showcase.
    */
   showcaseMode?: boolean
-  /** When false, keep the canvas invisible so it can't flash under the boot/gate. */
+  /** When false, keep the canvas invisible so it can't flash under the gate. */
   reveal?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'area-change', id: string | null): void
   (e: 'expand-change', expanded: boolean): void
   (e: 'intro-complete'): void
-  /** 3 = Three.js chunk loaded, 4 = multitool scene ready (fast path). */
-  (e: 'boot-progress', stage: number): void
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -32,12 +30,11 @@ onMounted(() => {
   const el = canvas.value
 
   void (async () => {
-    // Download Three in parallel with the boot ring; createMultitool is now a
-    // fast path (PMREM + CSG engraving deferred).
+    // Dynamic import keeps Three out of the first paint (human check + Vue shell).
+    // createMultitool is a fast path — PMREM + CSG engraving are deferred.
     try {
       const { createMultitool } = await import('../three/multitool')
       if (cancelled) return
-      emit('boot-progress', 3)
 
       tool = createMultitool(el, {
         showcaseMode: props.showcaseMode,
@@ -56,12 +53,9 @@ onMounted(() => {
 
       if (props.runIntro) tool.playIntro()
     } catch (err) {
-      // Still finish the boot ring — document + human check must remain usable
-      // even when WebGL is unavailable (headless, blocked GPU, etc.).
+      // Document + human check must remain usable when WebGL is unavailable.
       console.warn('[ToolScene] multitool failed to start', err)
       emit('intro-complete')
-    } finally {
-      if (!cancelled) emit('boot-progress', 4)
     }
   })()
 })
