@@ -195,7 +195,7 @@
 
         function paceTick() {
           if (jsTakenOver) return
-          // Hold at Scene until JS confirms the multitool is ready (Shell last).
+          // Hold at Loading until JS finishes the multitool (Shell plays last).
           if (stage >= 3) return
           paint(stage + 1)
         }

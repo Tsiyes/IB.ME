@@ -12,6 +12,8 @@ const props = defineProps<{
    * hero is a self-contained showcase.
    */
   showcaseMode?: boolean
+  /** When false, keep the canvas invisible so it can't flash under the boot/gate. */
+  reveal?: boolean
 }>()
 const emit = defineEmits<{
   (e: 'area-change', id: string | null): void
@@ -31,14 +33,21 @@ onMounted(() => {
   const el = canvas.value
 
   void (async () => {
-    // Let App → Engine → Scene click through at an even pace before we pull
-    // Three.js (its parse blocks the main thread and would freeze the ring).
-    await whenBootVisualAtLeast(3, 1800)
+    // Start the Three download immediately so it overlaps App/Engine clicks.
+    const pending = import('../three/multitool')
+
+    // Don't run the heavy sync construct until the ring has reached Loading —
+    // otherwise parse/CSG freezes the ring on an early segment.
+    await whenBootVisualAtLeast(3, 2000)
     if (cancelled) return
 
-    const { createMultitool } = await import('../three/multitool')
+    const { createMultitool } = await pending
     if (cancelled) return
     emit('boot-progress', 3)
+
+    // Yield so the Loading segment can paint before CSG blocks the thread.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    if (cancelled) return
 
     tool = createMultitool(el, {
       showcaseMode: props.showcaseMode,
@@ -86,7 +95,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="scene">
+  <div class="scene" :class="{ pending: !reveal }">
     <canvas ref="canvas" class="scene-canvas" />
   </div>
 </template>
@@ -95,6 +104,10 @@ onBeforeUnmount(() => {
 .scene {
   position: absolute;
   inset: 0;
+}
+.scene.pending {
+  opacity: 0;
+  pointer-events: none;
 }
 .scene-canvas {
   display: block;
