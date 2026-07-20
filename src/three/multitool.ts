@@ -1,15 +1,14 @@
 import * as THREE from 'three'
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
 import { Font, FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
-import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
-import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 // Pre-converted typeface JSON (subset of engraving glyphs) — same cheap path as
 // Helvetiker. Runtime TTFLoader + CDN opentype.js was the bot-check freeze.
 import robotoBold from '../assets/fonts/RobotoMono-Bold.typeface.json'
 import robotoMedium from '../assets/fonts/RobotoMono-Medium.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 import { probeGpu } from '../lib/gpu'
+import { runEngrave } from './engraveCsg'
 import {
   deserializeGeometry,
   serializeGeometry,
@@ -420,9 +419,35 @@ export function createMultitool(
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
   pickTargets.push(frontMesh)
 
-  // Build the merged text "cutter" whose recess is booleaned out of the cover.
-  // Cheap (~15ms); the expensive part is the boolean itself, run off-thread.
-  function buildCutterGeo(): THREE.BufferGeometry | null {
+  // Half-width of the hairline slice used to open multi-counter glyphs (see
+  // buildCutterGeo). Validated watertight for the "B" at the top-line size;
+  // thin enough to read as a stencil hairline.
+  const BRIDGE_HALF_W = 0.004
+
+  interface CutterBuild {
+    cutter: THREE.BufferGeometry
+    /** Thin boxes that slice enclosed counters open before the CDT cut. */
+    bridges: THREE.BufferGeometry | null
+  }
+
+  function xyBounds(points: THREE.Vector2[]) {
+    let minX = Infinity
+    let minY = Infinity
+    let maxX = -Infinity
+    let maxY = -Infinity
+    for (const p of points) {
+      minX = Math.min(minX, p.x)
+      minY = Math.min(minY, p.y)
+      maxX = Math.max(maxX, p.x)
+      maxY = Math.max(maxY, p.y)
+    }
+    return { minX, minY, maxX, maxY }
+  }
+
+  // Build the merged text "cutter" whose recess is booleaned out of the cover,
+  // plus hairline "bridge" boxes that open enclosed counters of multi-counter
+  // glyphs (only "B"/"8" here). Cheap (~15ms); the booleans run off-thread.
+  function buildCutterGeo(): CutterBuild | null {
     const loader = new FontLoader()
     const boldFont = loader.parse(robotoBold as unknown as Parameters<FontLoader['parse']>[0])
     const mediumFont = loader.parse(robotoMedium as unknown as Parameters<FontLoader['parse']>[0])
@@ -450,41 +475,70 @@ export function createMultitool(
       },
     ].filter((line) => line.text.length > 0)
 
-    function layoutTextGeos(depth: number, z: number): THREE.BufferGeometry[] {
-      return lines.map((line) => {
-        const geo = new TextGeometry(line.text, {
-          font: line.font,
-          size: line.size,
-          depth,
-          curveSegments: 2,
-          bevelEnabled: false,
-        })
-        geo.computeBoundingBox()
-        const bb = geo.boundingBox!
-        const cx = (bb.max.x + bb.min.x) / 2
-        geo.translate(-cx, line.y, z)
-        return geo
+    const z = surfaceZ - RECESS
+    const cutterGeos: THREE.BufferGeometry[] = []
+    const bridgeGeos: THREE.BufferGeometry[] = []
+
+    for (const line of lines) {
+      const shapes = line.font.generateShapes(line.text, line.size)
+      // ExtrudeGeometry of the glyph shapes is exactly what TextGeometry builds;
+      // we do it directly so we can also read each glyph's counters (holes).
+      const geo = new THREE.ExtrudeGeometry(shapes, {
+        depth: cutterDepth,
+        curveSegments: 2,
+        bevelEnabled: false,
       })
-    }
+      geo.computeBoundingBox()
+      const bb = geo.boundingBox!
+      const cx = (bb.max.x + bb.min.x) / 2
+      geo.translate(-cx, line.y, z)
+      cutterGeos.push(geo)
 
-    function centreBlockY(geos: THREE.BufferGeometry[]) {
-      let minY = Infinity
-      let maxY = -Infinity
-      for (const geo of geos) {
-        geo.computeBoundingBox()
-        const bb = geo.boundingBox!
-        minY = Math.min(minY, bb.min.y)
-        maxY = Math.max(maxY, bb.max.y)
+      // Only multi-counter glyphs (B/8) trip CDT. Slice a single full-height
+      // hairline down the glyph at the mean counter x: it exits both the top and
+      // bottom into cutter-free space, so every counter connects to the surface
+      // across a single stroke (robust at any glyph size).
+      for (const shape of shapes) {
+        if (!shape.holes || shape.holes.length < 2) continue
+        const outer = xyBounds(shape.getPoints(24))
+        let sx = 0
+        for (const hole of shape.holes) {
+          const hb = xyBounds(hole.getPoints(24))
+          sx += (hb.minX + hb.maxX) / 2
+        }
+        const hx = sx / shape.holes.length
+        const margin = line.size * 0.12
+        const yBot = outer.minY - margin
+        const yTop = outer.maxY + margin
+        const box = new THREE.BoxGeometry(BRIDGE_HALF_W * 2, yTop - yBot, cutterDepth + 0.2)
+        box.translate(hx, (yTop + yBot) / 2, cutterDepth / 2)
+        box.translate(-cx, line.y, z)
+        bridgeGeos.push(box)
       }
-      const cy = (minY + maxY) / 2
-      for (const geo of geos) geo.translate(0, -cy, 0)
     }
 
-    const cutterGeos = layoutTextGeos(cutterDepth, surfaceZ - RECESS)
-    centreBlockY(cutterGeos)
-    const cutterGeo = mergeGeometries(cutterGeos, false)
+    // Vertically centre the block; keep the bridges locked to the cutter.
+    let minY = Infinity
+    let maxY = -Infinity
+    for (const geo of cutterGeos) {
+      geo.computeBoundingBox()
+      minY = Math.min(minY, geo.boundingBox!.min.y)
+      maxY = Math.max(maxY, geo.boundingBox!.max.y)
+    }
+    const cy = (minY + maxY) / 2
+    for (const geo of cutterGeos) geo.translate(0, -cy, 0)
+    for (const geo of bridgeGeos) geo.translate(0, -cy, 0)
+
+    const cutter = mergeGeometries(cutterGeos, false)
     cutterGeos.forEach((g) => g.dispose())
-    return cutterGeo
+    if (!cutter) return null
+
+    let bridges: THREE.BufferGeometry | null = null
+    if (bridgeGeos.length) {
+      bridges = mergeGeometries(bridgeGeos, false)
+      bridgeGeos.forEach((g) => g.dispose())
+    }
+    return { cutter, bridges }
   }
 
   // Swap the plain cover for the engraved result (from the worker or inline CSG).
@@ -505,21 +559,14 @@ export function createMultitool(
   }
 
   // Inline boolean — fallback for when Web Workers are unavailable / fail.
-  function engraveInline(cutterGeo: THREE.BufferGeometry) {
+  function engraveInline(build: CutterBuild) {
     try {
-      const scaleBrush = new Brush(mergeVertices(frontGeo.clone()), scaleMat)
-      const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
-      const evaluator = new Evaluator()
-      evaluator.useGroups = true
-      // Match the worker: legacy splitter (CDT left letter counters
-      // see-through) and skip the unused uv attribute.
-      evaluator.attributes = ['position', 'normal']
-      const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-      applyEngraveResult(result.geometry)
+      applyEngraveResult(runEngrave(frontGeo.clone(), build.cutter, build.bridges))
     } catch (err) {
       console.warn('[multitool] engraving CSG failed, keeping plain cover', err)
     } finally {
-      cutterGeo.dispose()
+      build.cutter.dispose()
+      build.bridges?.dispose()
     }
   }
 
@@ -529,48 +576,54 @@ export function createMultitool(
     if (!running || engraved) return
     engraved = true
 
-    const cutterGeo = buildCutterGeo()
-    if (!cutterGeo) return
+    const build = buildCutterGeo()
+    if (!build) return
 
-    // Preferred path: run the ~1–3s CSG boolean in a worker so the human-check
-    // gate and the intro never freeze. Falls back to inline on any failure.
-    if (typeof Worker !== 'undefined') {
-      try {
-        const worker = new Worker(new URL('./engrave.worker.ts', import.meta.url), {
-          type: 'module',
-        })
-        engraveWorker = worker
-        const front = serializeGeometry(frontGeo.clone())
-        const cutter = serializeGeometry(cutterGeo)
-        cutterGeo.dispose()
-
-        const clear = () => {
-          worker.terminate()
-          if (engraveWorker === worker) engraveWorker = null
-        }
-        worker.onmessage = (e: MessageEvent<EngraveResponse>) => {
-          clear()
-          const msg = e.data
-          if (msg?.ok && msg.geometry) applyEngraveResult(deserializeGeometry(msg.geometry))
-          else console.warn('[multitool] engrave worker failed, keeping plain cover', msg?.error)
-        }
-        worker.onerror = (err) => {
-          console.warn('[multitool] engrave worker error, running inline', err)
-          clear()
-          const retry = buildCutterGeo()
-          if (retry) engraveInline(retry)
-        }
-        worker.postMessage({ front: front.data, cutter: cutter.data }, [
-          ...front.transfer,
-          ...cutter.transfer,
-        ])
-        return
-      } catch (err) {
-        console.warn('[multitool] engrave worker unavailable, running inline', err)
-      }
+    // No worker support → inline (blocks, but rare).
+    if (typeof Worker === 'undefined') {
+      engraveInline(build)
+      return
     }
 
-    engraveInline(cutterGeo)
+    // Preferred path: run the CSG boolean(s) in a worker so the human-check gate
+    // and the intro never freeze. Falls back to inline on any failure.
+    try {
+      const worker = new Worker(new URL('./engrave.worker.ts', import.meta.url), {
+        type: 'module',
+      })
+      engraveWorker = worker
+      const front = serializeGeometry(frontGeo.clone())
+      const cutter = serializeGeometry(build.cutter)
+      const bridges = build.bridges ? serializeGeometry(build.bridges) : null
+      build.cutter.dispose()
+      build.bridges?.dispose()
+
+      const clear = () => {
+        worker.terminate()
+        if (engraveWorker === worker) engraveWorker = null
+      }
+      worker.onmessage = (e: MessageEvent<EngraveResponse>) => {
+        clear()
+        const msg = e.data
+        if (msg?.ok && msg.geometry) applyEngraveResult(deserializeGeometry(msg.geometry))
+        else console.warn('[multitool] engrave worker failed, keeping plain cover', msg?.error)
+      }
+      worker.onerror = (err) => {
+        console.warn('[multitool] engrave worker error, running inline', err)
+        clear()
+        const retry = buildCutterGeo()
+        if (retry) engraveInline(retry)
+      }
+      worker.postMessage(
+        { front: front.data, cutter: cutter.data, bridges: bridges ? bridges.data : null },
+        [...front.transfer, ...cutter.transfer, ...(bridges ? bridges.transfer : [])],
+      )
+    } catch (err) {
+      console.warn('[multitool] engrave worker unavailable, running inline', err)
+      // build may be disposed mid-setup; rebuild for the inline fallback.
+      const retry = buildCutterGeo()
+      if (retry) engraveInline(retry)
+    }
   }
 
   // ---- pivot + end pins (rods) ----
