@@ -1,20 +1,57 @@
 // Lightweight procedural mechanical clicks via Web Audio — no asset files.
 // Used for tool deploy and the stacked accordion plate-separation ticks.
+//
+// Browsers refuse to start AudioContext until a user gesture (autoplay policy).
+// Create/resume only on unlock(); every play path no-ops until the context runs.
 
 let ctx: AudioContext | null = null
+let unlocked = false
+let unlockPromise: Promise<boolean> | null = null
 
-function ac(): AudioContext | null {
+function getAudioCtor(): (typeof AudioContext) | null {
   if (typeof window === 'undefined') return null
-  const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (!AudioCtx) return null
-  if (!ctx) ctx = new AudioCtx()
-  if (ctx.state === 'suspended') void ctx.resume()
-  return ctx
+  return (
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext ||
+    null
+  )
 }
 
-/** Unlock audio on the first user gesture (browsers block autoplay). */
-export function unlockAudio() {
-  ac()
+/** True once a gesture has successfully started the shared AudioContext. */
+export function isAudioUnlocked(): boolean {
+  return unlocked && !!ctx && ctx.state === 'running'
+}
+
+/**
+ * Create (if needed) and resume AudioContext. Must be called from a user gesture
+ * (click / pointerdown / keydown). Returns whether audio is now runnable.
+ */
+export async function unlockAudio(): Promise<boolean> {
+  if (isAudioUnlocked()) return true
+  if (unlockPromise) return unlockPromise
+
+  unlockPromise = (async () => {
+    const AudioCtx = getAudioCtor()
+    if (!AudioCtx) return false
+    try {
+      if (!ctx) ctx = new AudioCtx()
+      if (ctx.state === 'suspended') await ctx.resume()
+      unlocked = ctx.state === 'running'
+      return unlocked
+    } catch {
+      unlocked = false
+      return false
+    } finally {
+      unlockPromise = null
+    }
+  })()
+
+  return unlockPromise
+}
+
+function ac(): AudioContext | null {
+  if (!unlocked || !ctx || ctx.state !== 'running') return null
+  return ctx
 }
 
 function noiseBuffer(acRef: AudioContext, seconds: number): AudioBuffer {
@@ -40,7 +77,6 @@ function playBurst(opts: {
   const dur = opts.dur ?? 0.045
   const noiseDur = opts.noiseDur ?? 0.028
 
-  // Short metallic ping
   const osc = audio.createOscillator()
   osc.type = 'square'
   osc.frequency.setValueAtTime(opts.freq, t0)
@@ -62,7 +98,6 @@ function playBurst(opts: {
   osc.start(t0)
   osc.stop(t0 + dur + 0.01)
 
-  // Soft transient noise for the "click" body
   const src = audio.createBufferSource()
   src.buffer = noiseBuffer(audio, noiseDur)
   const noiseFilter = audio.createBiquadFilter()

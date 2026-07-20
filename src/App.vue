@@ -1,25 +1,20 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import BotCheck from './components/BotCheck.vue'
 import GpuHint from './components/GpuHint.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
-import { bootDone, playShellAndDwell } from './lib/boot'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const MOBILE_MQ = '(max-width: 820px)'
 
 const unlocked = ref(false)
-/** True once the 4-part boot ring has finished and the human check may show. */
-const bootReady = ref(false)
 const introDone = ref(false)
 const expanded = ref(false)
 const activeId = ref<string | null>(null)
 const forceArea = ref<number | null>(null)
 const visits = ref<number | null>(null)
 const botsBounced = ref<number | null>(null)
-/** Mirrors visual boot segments lit (Implementation…HealthTech). */
-const bootStage = ref(0)
 const isMobile = ref(
   typeof window !== 'undefined' && window.matchMedia(MOBILE_MQ).matches,
 )
@@ -80,22 +75,6 @@ function onExpandChange(isExpanded: boolean) {
 function onIntroComplete() {
   introDone.value = true
 }
-async function onBootProgress(stage: number) {
-  bootStage.value = Math.max(bootStage.value, stage)
-  // Don't advance the ring on engine/scene milestones — that stalls mid-fill
-  // during Three.js parse. Only the fast-path completion plays the sequence.
-  if (stage < 4) return
-  if (bootReady.value) return
-
-  // Even Implementation→Product→QA→HealthTech clicks, then reveal the gate.
-  await playShellAndDwell()
-  bootReady.value = true
-  await nextTick()
-  // Two frames so BotCheck is fully painted opaque under #ib-boot before fade.
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-  bootDone()
-}
 function hoverLegend(index: number | null) {
   if (isMobile.value) return
   forceArea.value = index
@@ -118,16 +97,13 @@ function onScrollCue() {
 </script>
 
 <template>
-  <!-- Gate mounts only when the boot ring finishes AND choices are ready to click.
-       Scene stays hidden/inert until unlock so nothing looks interactive early. -->
+  <!-- Human check first; WebGL warms underneath while the user picks a tool. -->
   <Transition name="gate">
-    <BotCheck v-if="bootReady && !unlocked" @passed="onUnlocked" />
+    <BotCheck v-if="!unlocked" @passed="onUnlocked" />
   </Transition>
 
   <GpuHint v-if="unlocked" />
 
-  <!-- Scene mounts under the boot splash so WebGL warms before the human check.
-       Kept invisible until unlock so it can't flash through the splash→gate handoff. -->
   <section
     class="hero"
     :class="{ showcase: isMobile }"
@@ -142,7 +118,6 @@ function onScrollCue() {
       @area-change="onAreaChange"
       @expand-change="onExpandChange"
       @intro-complete="onIntroComplete"
-      @boot-progress="onBootProgress"
     />
 
     <!-- Identity is engraved on the tool's face plate; this heading is for
@@ -691,10 +666,6 @@ function onScrollCue() {
 .gate-enter-active,
 .gate-leave-active {
   transition: opacity 380ms ease;
-}
-/* Appear instantly under the boot splash — only animate the leave. */
-.gate-enter-active {
-  transition: none;
 }
 .gate-enter-from,
 .gate-leave-to {

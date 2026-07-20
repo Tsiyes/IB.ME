@@ -267,7 +267,7 @@ export function createMultitool(
 
   const scene = new THREE.Scene()
   const pmrem = new THREE.PMREMGenerator(renderer)
-  // Defer PMREM — sync fromScene() was a multi-hundred-ms hitch on the boot path.
+  // Defer PMREM — sync fromScene() was a multi-hundred-ms hitch on first paint.
   // Canvas stays hidden until unlock, so metals can enrich before the user sees them.
   let envReady = false
   function bakeEnvironment() {
@@ -374,7 +374,7 @@ export function createMultitool(
   const back = makeScale(-0.52)
   pickTargets.push(back.mesh)
 
-  // ---- front cover: plain polymer first; CSG engrave deferred off the boot path ----
+  // ---- front cover: plain polymer first; CSG engrave deferred off the create path ----
   const inkMat = new THREE.MeshStandardMaterial({
     color: 0xfdcb93,
     metalness: 0.12,
@@ -717,7 +717,8 @@ export function createMultitool(
 
   function playIntro() {
     if (introDone || introPlaying) return
-    unlockAudio()
+    // Audio must already be unlocked by the human-check click — browsers will
+    // not start AudioContext from this deferred path.
     if (preferReducedMotion()) {
       finishIntro()
       return
@@ -800,7 +801,6 @@ export function createMultitool(
 
   function onMove(e: PointerEvent) {
     if (showcaseMode) return
-    unlockAudio()
     stageHover = true
     const rect = canvas.getBoundingClientRect()
     pointer.set(
@@ -817,7 +817,6 @@ export function createMultitool(
   }
   function onEnter() {
     if (showcaseMode) return
-    unlockAudio()
     stageHover = true
   }
   function onLeave() {
@@ -827,7 +826,8 @@ export function createMultitool(
     parallaxTarget.set(0, 0)
   }
   function onPointerDown() {
-    unlockAudio()
+    // pointerdown is a real user gesture; pointermove is not.
+    void unlockAudio()
   }
 
   canvas.addEventListener('pointermove', onMove)
@@ -1025,8 +1025,8 @@ export function createMultitool(
   // of the assembled tool under the bot-check gate.
   applyIntro(performance.now())
 
-  // Heavy enrichment after the boot path returns — keeps the load ring moving
-  // and lets the human check appear while PMREM + CSG finish under the splash.
+  // Heavy enrichment after create returns — human check stays responsive while
+  // PMREM + CSG finish under the gate (canvas still hidden until unlock).
   disposables.push(frontGeo)
   let enrichTimer = 0
   const enrichDetails = () => {
@@ -1070,7 +1070,7 @@ export function createMultitool(
     },
     setActiveArea(index: number | null) {
       if (!introDone || showcaseMode) return
-      unlockAudio()
+      void unlockAudio()
       externalIndex = index
       if (index === null) requestIndex(-1)
       report()
