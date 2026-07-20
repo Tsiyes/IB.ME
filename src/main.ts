@@ -5,5 +5,5 @@ import { bootStage } from './lib/boot'
 
 createApp(App).mount('#app')
 
-// Kick the even-paced ring (App → Engine → Scene → Shell). Shell waits on the scene.
+// Kick / continue the paced ring (App → Engine → Loading → Shell).
 bootStage('app')

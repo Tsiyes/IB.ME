@@ -3,19 +3,17 @@
 import { playAccordionClick } from '../three/sfx'
 
 /**
- * Real load milestones (reported by the app). Visual order is different:
- * App → Engine → Loading → Shell — Shell plays last so the long warm-up wait
- * isn't spent staring at the first segment. The third slot is labeled Loading
- * because that is where we hold while Three.js parses.
+ * Visual order: App → Engine → Loading → Shell.
+ * Shell always plays last and dwells before the splash dismisses.
  */
 export type BootStage = 'app' | 'engine' | 'scene' | 'shell'
 
 const ORDER: BootStage[] = ['app', 'engine', 'scene', 'shell']
 
-/** Equal cadence between segment clicks (feels even regardless of real I/O). */
-const CADENCE_MS = 450
-/** Slightly slower while the scene is still warming — keeps early clicks from dumping. */
-const WARMUP_CADENCE_MS = 520
+/** Even cadence between segment clicks. */
+const CADENCE_MS = 480
+/** How long Shell stays lit before the splash may dismiss. */
+const SHELL_DWELL_MS = 520
 
 type BootApi = {
   set: (stage: BootStage | number) => void
@@ -31,13 +29,18 @@ declare global {
 
 /** True once the multitool scene has finished constructing (unlocks Shell). */
 let sceneReady = false
-/** Segments lit on the splash (1–4). Driven by the pacer, not raw I/O. */
+/** Segments lit on the splash (1–4). */
 let visual = 0
 let tickTimer: ReturnType<typeof setTimeout> | null = null
+let claimed = false
 const catchUpWaiters: Array<() => void> = []
 
 function api(): BootApi | undefined {
   return typeof window !== 'undefined' ? window.__IB_BOOT : undefined
+}
+
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms))
 }
 
 /** Adopt progress the inline HTML pacer may have already painted. */
@@ -73,15 +76,28 @@ function clearTick() {
   }
 }
 
+function claimSplash() {
+  if (claimed) return
+  claimed = true
+  syncVisualFromDom()
+  // Re-paint current stage so the inline interval stops without advancing.
+  api()?.set(visual)
+}
+
+function lightSegment(n: number) {
+  if (n <= visual) return
+  visual = n
+  api()?.set(visual)
+  playAccordionClick(visual - 1, 0)
+}
+
 function lightNext() {
   tickTimer = null
   if (visual >= allowedMax()) {
     flushWaiters()
     return
   }
-  visual += 1
-  api()?.set(visual)
-  playAccordionClick(visual - 1, 0)
+  lightSegment(visual + 1)
   if (visual >= 4) {
     flushWaiters()
     return
@@ -97,31 +113,51 @@ function scheduleTick() {
     return
   }
   if (preferReducedMotion()) {
-    while (visual < allowedMax()) {
-      visual += 1
-      api()?.set(visual)
-    }
+    while (visual < allowedMax()) lightSegment(visual + 1)
     flushWaiters()
     return
   }
-  // Even cadence: first click almost immediately, then steady gaps.
-  // Warm-up cadence paces App/Engine/Scene; Shell uses the standard gap after ready.
-  const delay = visual === 0 ? 50 : sceneReady ? CADENCE_MS : WARMUP_CADENCE_MS
+  const delay = visual === 0 ? 60 : CADENCE_MS
   tickTimer = setTimeout(lightNext, delay)
 }
 
 /**
  * Report a real load milestone / kick the pacer.
- * Visual order is App → Engine → Scene → Shell. Passing `'shell'` (or 4)
- * means the multitool is ready and the final Shell click may play.
+ * Passing `'shell'` (or 4) means the multitool is ready — Shell may click.
  */
 export function bootStage(stage: BootStage | number) {
-  syncVisualFromDom()
-  // Claim the splash so the inline HTML interval stops (JS owns pacing now).
-  api()?.set(visual)
+  claimSplash()
   const n = toIndex(stage)
   if (stage === 'shell' || n >= 4) sceneReady = true
   scheduleTick()
+}
+
+/**
+ * Ensure Shell is lit, click it if needed, and dwell so it reads before dismiss.
+ * Call this when the multitool is ready — never skip straight to bootDone().
+ */
+export async function playShellAndDwell(): Promise<void> {
+  claimSplash()
+  sceneReady = true
+  clearTick()
+  syncVisualFromDom()
+
+  // Catch up App/Engine/Loading quickly if we're behind, then Shell.
+  if (preferReducedMotion()) {
+    while (visual < 4) lightSegment(visual + 1)
+    return
+  }
+
+  while (visual < 3) {
+    lightSegment(visual + 1)
+    await sleep(CADENCE_MS)
+  }
+
+  if (visual < 4) {
+    lightSegment(4)
+  }
+  await sleep(SHELL_DWELL_MS)
+  flushWaiters()
 }
 
 /** Resolves once all four visual segments (ending on Shell) have clicked through. */

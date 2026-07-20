@@ -4,7 +4,7 @@ import BotCheck from './components/BotCheck.vue'
 import GpuHint from './components/GpuHint.vue'
 import ToolScene from './components/ToolScene.vue'
 import { accolades, areas, contact, education, experience, profile } from './data/cv'
-import { bootDone, bootStage as setBootStage, whenBootCaughtUp } from './lib/boot'
+import { bootDone, bootStage as setBootStage, playShellAndDwell } from './lib/boot'
 import { formatCount, getCachedCounters, loadCounters } from './lib/counters'
 
 const MOBILE_MQ = '(max-width: 820px)'
@@ -84,13 +84,14 @@ async function onBootProgress(stage: number) {
   bootStage.value = Math.max(bootStage.value, stage)
   if (stage >= 3) setBootStage('engine')
   if (stage < 4) return
-
-  // Multitool ready — unlock the final Shell click on the paced ring.
-  setBootStage('shell')
   if (bootReady.value) return
-  await whenBootCaughtUp()
+
+  // Light Shell (never skip), dwell, then reveal the gate under the splash.
+  await playShellAndDwell()
   bootReady.value = true
   await nextTick()
+  // Two frames so BotCheck is fully painted opaque under #ib-boot before fade.
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
   bootDone()
 }
@@ -122,7 +123,8 @@ function onScrollCue() {
 
   <GpuHint v-if="unlocked" />
 
-  <!-- Scene mounts under the boot splash so WebGL warms before the human check. -->
+  <!-- Scene mounts under the boot splash so WebGL warms before the human check.
+       Kept invisible until unlock so it can't flash through the splash→gate handoff. -->
   <section
     class="hero"
     :class="{ showcase: isMobile }"
@@ -133,6 +135,7 @@ function onScrollCue() {
       :force-area="forceArea"
       :run-intro="unlocked"
       :showcase-mode="isMobile"
+      :reveal="unlocked"
       @area-change="onAreaChange"
       @expand-change="onExpandChange"
       @intro-complete="onIntroComplete"
@@ -686,6 +689,10 @@ function onScrollCue() {
 .gate-enter-active,
 .gate-leave-active {
   transition: opacity 380ms ease;
+}
+/* Appear instantly under the boot splash — only animate the leave. */
+.gate-enter-active {
+  transition: none;
 }
 .gate-enter-from,
 .gate-leave-to {
