@@ -107,8 +107,7 @@
         text-transform: uppercase;
         color: #7b8693;
       }
-      #ib-boot.is-done .boot-ring,
-      #ib-boot.is-paced .boot-ring {
+      #ib-boot.is-done .boot-ring {
         animation: none;
       }
       @keyframes ib-boot-spin {
@@ -186,8 +185,6 @@
               segs[i].classList.remove('on')
             }
           }
-          // Spin only while indeterminate — stop once real segment clicks begin.
-          if (root) root.classList.toggle('is-paced', stage > 0)
           if (status) {
             // Indeterminate until JS fills segments (avoids a stuck first click
             // while Three.js parses on the main thread).
@@ -220,7 +217,7 @@
           },
         }
 
-        // Spin only — segment clicks start after the fast scene path is ready.
+        // Spin from the start; segment clicks begin after the fast scene path is ready.
         paint(0)
       })()
     </script>
