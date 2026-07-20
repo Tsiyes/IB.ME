@@ -10,7 +10,18 @@ import robotoBold from '../assets/fonts/RobotoMono-Bold.typeface.json'
 import robotoMedium from '../assets/fonts/RobotoMono-Medium.typeface.json'
 import { areas, contact, profile, type ToolKind } from '../data/cv'
 import { probeGpu } from '../lib/gpu'
+import {
+  deserializeGeometry,
+  serializeGeometry,
+  type SerializedGeometry,
+} from './geometryTransfer'
 import { playAccordionClick, playToolClick, unlockAudio } from './sfx'
+
+interface EngraveResponse {
+  ok: boolean
+  geometry?: SerializedGeometry
+  error?: string
+}
 
 // -----------------------------------------------------------------------------
 // A realistic folding penknife multi-tool.
@@ -409,11 +420,9 @@ export function createMultitool(
   explodeLayers.push({ obj: frontGroup, baseZ: 0.52 })
   pickTargets.push(frontMesh)
 
-  let engraved = false
-  function engraveFront() {
-    if (!running || engraved) return
-    engraved = true
-
+  // Build the merged text "cutter" whose recess is booleaned out of the cover.
+  // Cheap (~15ms); the expensive part is the boolean itself, run off-thread.
+  function buildCutterGeo(): THREE.BufferGeometry | null {
     const loader = new FontLoader()
     const boldFont = loader.parse(robotoBold as unknown as Parameters<FontLoader['parse']>[0])
     const mediumFont = loader.parse(robotoMedium as unknown as Parameters<FontLoader['parse']>[0])
@@ -475,29 +484,90 @@ export function createMultitool(
     centreBlockY(cutterGeos)
     const cutterGeo = mergeGeometries(cutterGeos, false)
     cutterGeos.forEach((g) => g.dispose())
-    if (!cutterGeo) return
+    return cutterGeo
+  }
 
+  // Swap the plain cover for the engraved result (from the worker or inline CSG).
+  function applyEngraveResult(resultGeo: THREE.BufferGeometry) {
+    if (!running) {
+      resultGeo.dispose()
+      return
+    }
+    const mesh = new THREE.Mesh(resultGeo, [scaleMat, inkMat])
+    const pickIdx = pickTargets.indexOf(frontMesh)
+    frontGroup.remove(frontMesh)
+    // frontGeo (plain cover) is still held for disposal on teardown.
+    frontMesh = mesh
+    frontGroup.add(frontMesh)
+    if (pickIdx >= 0) pickTargets[pickIdx] = frontMesh
+    else pickTargets.push(frontMesh)
+    disposables.push(frontMesh.geometry)
+  }
+
+  // Inline boolean — fallback for when Web Workers are unavailable / fail.
+  function engraveInline(cutterGeo: THREE.BufferGeometry) {
     try {
       const scaleBrush = new Brush(mergeVertices(frontGeo.clone()), scaleMat)
       const textBrush = new Brush(mergeVertices(cutterGeo), inkMat)
       const evaluator = new Evaluator()
       evaluator.useGroups = true
       const result = evaluator.evaluate(scaleBrush, textBrush, SUBTRACTION)
-      result.material = [scaleMat, inkMat]
-
-      const pickIdx = pickTargets.indexOf(frontMesh)
-      frontGroup.remove(frontMesh)
-      // frontGeo still held for disposal below; plain mesh used it directly.
-      frontMesh = result
-      frontGroup.add(frontMesh)
-      if (pickIdx >= 0) pickTargets[pickIdx] = frontMesh
-      else pickTargets.push(frontMesh)
-      disposables.push(frontMesh.geometry)
+      applyEngraveResult(result.geometry)
     } catch (err) {
       console.warn('[multitool] engraving CSG failed, keeping plain cover', err)
     } finally {
       cutterGeo.dispose()
     }
+  }
+
+  let engraved = false
+  let engraveWorker: Worker | null = null
+  function engraveFront() {
+    if (!running || engraved) return
+    engraved = true
+
+    const cutterGeo = buildCutterGeo()
+    if (!cutterGeo) return
+
+    // Preferred path: run the ~1–3s CSG boolean in a worker so the human-check
+    // gate and the intro never freeze. Falls back to inline on any failure.
+    if (typeof Worker !== 'undefined') {
+      try {
+        const worker = new Worker(new URL('./engrave.worker.ts', import.meta.url), {
+          type: 'module',
+        })
+        engraveWorker = worker
+        const front = serializeGeometry(frontGeo.clone())
+        const cutter = serializeGeometry(cutterGeo)
+        cutterGeo.dispose()
+
+        const clear = () => {
+          worker.terminate()
+          if (engraveWorker === worker) engraveWorker = null
+        }
+        worker.onmessage = (e: MessageEvent<EngraveResponse>) => {
+          clear()
+          const msg = e.data
+          if (msg?.ok && msg.geometry) applyEngraveResult(deserializeGeometry(msg.geometry))
+          else console.warn('[multitool] engrave worker failed, keeping plain cover', msg?.error)
+        }
+        worker.onerror = (err) => {
+          console.warn('[multitool] engrave worker error, running inline', err)
+          clear()
+          const retry = buildCutterGeo()
+          if (retry) engraveInline(retry)
+        }
+        worker.postMessage({ front: front.data, cutter: cutter.data }, [
+          ...front.transfer,
+          ...cutter.transfer,
+        ])
+        return
+      } catch (err) {
+        console.warn('[multitool] engrave worker unavailable, running inline', err)
+      }
+    }
+
+    engraveInline(cutterGeo)
   }
 
   // ---- pivot + end pins (rods) ----
@@ -1035,11 +1105,15 @@ export function createMultitool(
     engraveFront()
   }
   enrichTimer = window.setTimeout(() => {
+    // Kick the engraving straight away: its heavy CSG boolean now runs in a
+    // worker, so it overlaps the user's human-check time without blocking the
+    // main thread. Only the PMREM bake (main-thread GPU work) waits for idle.
+    engraveFront()
     const w = window as Window & {
       requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number
     }
-    if (w.requestIdleCallback) w.requestIdleCallback(() => enrichDetails(), { timeout: 900 })
-    else enrichDetails()
+    if (w.requestIdleCallback) w.requestIdleCallback(() => bakeEnvironment(), { timeout: 900 })
+    else bakeEnvironment()
   }, 0)
 
   return {
@@ -1078,6 +1152,8 @@ export function createMultitool(
     dispose() {
       running = false
       window.clearTimeout(enrichTimer)
+      engraveWorker?.terminate()
+      engraveWorker = null
       canvas.removeEventListener('pointermove', onMove)
       canvas.removeEventListener('pointerenter', onEnter)
       canvas.removeEventListener('pointerleave', onLeave)
