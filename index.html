@@ -44,7 +44,8 @@
         z-index: 100;
         display: grid;
         place-items: center;
-        background:
+        background-color: #e8ecf1;
+        background-image:
           radial-gradient(900px 640px at 50% 28%, #fdfefe 0%, transparent 60%),
           linear-gradient(180deg, #eef1f5 0%, #e4e8ee 100%);
         font-family: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
@@ -84,6 +85,7 @@
       }
       #ib-boot .boot-seg.on {
         stroke-opacity: 1;
+        animation: ib-boot-tick 280ms ease-out;
       }
       #ib-boot .boot-seg[data-i='1'].on {
         stroke: #ff5f59;
@@ -105,9 +107,26 @@
         text-transform: uppercase;
         color: #7b8693;
       }
+      #ib-boot.is-done .boot-ring {
+        animation: none;
+      }
       @keyframes ib-boot-spin {
         to {
           transform: rotate(270deg);
+        }
+      }
+      @keyframes ib-boot-tick {
+        0% {
+          stroke-width: 5;
+          stroke-opacity: 0.35;
+        }
+        40% {
+          stroke-width: 7;
+          stroke-opacity: 1;
+        }
+        100% {
+          stroke-width: 5;
+          stroke-opacity: 1;
         }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -115,6 +134,9 @@
           transition: none;
         }
         #ib-boot .boot-ring {
+          animation: none;
+        }
+        #ib-boot .boot-seg.on {
           animation: none;
         }
       }
@@ -149,10 +171,19 @@
         var segs = root ? root.querySelectorAll('.boot-seg') : []
 
         function paint(n) {
+          var prev = stage
           stage = Math.max(stage, Math.min(4, n | 0))
           for (var i = 0; i < segs.length; i++) {
-            if (i < stage) segs[i].classList.add('on')
-            else segs[i].classList.remove('on')
+            if (i < stage) {
+              // Retrigger tick animation when a segment newly lights.
+              if (i >= prev) {
+                segs[i].classList.remove('on')
+                void segs[i].offsetWidth
+              }
+              segs[i].classList.add('on')
+            } else {
+              segs[i].classList.remove('on')
+            }
           }
           if (status) status.textContent = labels[Math.max(0, stage - 1)] || 'Loading'
         }
