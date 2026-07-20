@@ -3,21 +3,189 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
-      rel="stylesheet"
-    />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="Isaac Bristow — CV as an interactive 3D multi-tool. Scroll to deploy each tool across Development, Product, Management and Healthcare Sciences."
+      content="IB.ME — Isaac Bristow's CV as an interactive 3D multi-tool across Implementation, Product, Management and Healthcare Sciences."
     />
-    <title>Isaac Bristow · Multi-Tool CV</title>
+    <meta name="theme-color" content="#4d48fc" />
+    <title>IB.ME</title>
+    <!-- Non-blocking font load: paint the boot ring before webfonts arrive. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,300;0,400;0,500;0,700;1,400&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
+    <style>
+      /* Inline boot shell — visible before any JS module evaluates. */
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: #e8ecf1;
+      }
+      #ib-boot {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: grid;
+        place-items: center;
+        background:
+          radial-gradient(900px 640px at 50% 28%, #fdfefe 0%, transparent 60%),
+          linear-gradient(180deg, #eef1f5 0%, #e4e8ee 100%);
+        font-family: 'Roboto Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+        color: #12181f;
+        transition: opacity 320ms ease, visibility 320ms ease;
+      }
+      #ib-boot.is-done {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+      #ib-boot .boot-inner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 18px;
+      }
+      #ib-boot .boot-mark {
+        margin: 0;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        color: #4d48fc;
+      }
+      #ib-boot .boot-ring {
+        width: 72px;
+        height: 72px;
+        transform: rotate(-90deg);
+        animation: ib-boot-spin 1.8s linear infinite;
+      }
+      #ib-boot .boot-seg {
+        fill: none;
+        stroke-width: 5;
+        stroke-linecap: butt;
+        stroke: rgba(18, 24, 31, 0.1);
+        transition: stroke 220ms ease, stroke-opacity 220ms ease;
+      }
+      #ib-boot .boot-seg.on {
+        stroke-opacity: 1;
+      }
+      #ib-boot .boot-seg[data-i='1'].on {
+        stroke: #ff5f59;
+      }
+      #ib-boot .boot-seg[data-i='2'].on {
+        stroke: #2f9e8f;
+      }
+      #ib-boot .boot-seg[data-i='3'].on {
+        stroke: #e0a85c;
+      }
+      #ib-boot .boot-seg[data-i='4'].on {
+        stroke: #c96b8c;
+      }
+      #ib-boot .boot-status {
+        margin: 0;
+        min-height: 1.2em;
+        font-size: 0.68rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #7b8693;
+      }
+      @keyframes ib-boot-spin {
+        to {
+          transform: rotate(270deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #ib-boot {
+          transition: none;
+        }
+        #ib-boot .boot-ring {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
+    <div id="ib-boot" aria-live="polite" aria-busy="true">
+      <div class="boot-inner">
+        <p class="boot-mark">IB.ME</p>
+        <!--
+          Four arcs = four specialist areas. stroke-dasharray: arc, gap.
+          Circumference ≈ 2π·28 ≈ 176; each arc ≈ 36, gap ≈ 8.
+        -->
+        <svg class="boot-ring" viewBox="0 0 72 72" aria-hidden="true">
+          <circle class="boot-seg" data-i="1" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="0" />
+          <circle class="boot-seg" data-i="2" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="-44" />
+          <circle class="boot-seg" data-i="3" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="-88" />
+          <circle class="boot-seg" data-i="4" cx="36" cy="36" r="28" stroke-dasharray="36 140" stroke-dashoffset="-132" />
+        </svg>
+        <p class="boot-status" id="ib-boot-status">Loading</p>
+      </div>
+    </div>
+
     <div id="app"></div>
+
+    <script>
+      ;(function () {
+        var labels = ['Shell', 'App', 'Engine', 'Scene']
+        var stage = 0
+        var root = document.getElementById('ib-boot')
+        var status = document.getElementById('ib-boot-status')
+        var segs = root ? root.querySelectorAll('.boot-seg') : []
+
+        function paint(n) {
+          stage = Math.max(stage, Math.min(4, n | 0))
+          for (var i = 0; i < segs.length; i++) {
+            if (i < stage) segs[i].classList.add('on')
+            else segs[i].classList.remove('on')
+          }
+          if (status) status.textContent = labels[Math.max(0, stage - 1)] || 'Loading'
+        }
+
+        function done() {
+          paint(4)
+          if (!root) return
+          root.classList.add('is-done')
+          root.setAttribute('aria-busy', 'false')
+          window.setTimeout(function () {
+            if (root && root.parentNode) root.parentNode.removeChild(root)
+          }, 360)
+        }
+
+        window.__IB_BOOT = {
+          set: function (s) {
+            if (typeof s === 'string') {
+              var map = { shell: 1, app: 2, engine: 3, scene: 4 }
+              paint(map[s] || stage)
+            } else {
+              paint(s)
+            }
+          },
+          done: done,
+          get stage() {
+            return stage
+          },
+        }
+
+        // Stage 1: HTML shell is parsing / painted.
+        paint(1)
+      })()
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

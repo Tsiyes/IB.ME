@@ -33,6 +33,18 @@ if (!existsSync(htmlPath)) {
   if (!html.includes('id="app"')) {
     fail('dist/index.html missing #app mount')
   }
+  if (!html.includes('>IB.ME</title>') && !html.includes('<title>IB.ME</title>')) {
+    fail('dist/index.html title should be IB.ME')
+  }
+  if (!html.includes('id="ib-boot"')) {
+    fail('dist/index.html missing #ib-boot loading shell')
+  }
+  if (!html.includes('__IB_BOOT')) {
+    fail('dist/index.html missing __IB_BOOT boot bridge')
+  }
+  if (!html.includes('favicon.svg')) {
+    fail('dist/index.html missing favicon.svg link')
+  }
   if (openScripts !== closeScripts) {
     fail(`unbalanced script tags (open=${openScripts}, close=${closeScripts})`)
   }
@@ -65,6 +77,17 @@ if (!existsSync(htmlPath)) {
   }
   if (!html.includes('cache-bust.js')) {
     fail('dist/index.html does not link cache-bust.js')
+  }
+  if (!existsSync(join(dist, 'favicon.svg'))) {
+    fail('missing dist/favicon.svg')
+  } else {
+    const fav = readFileSync(join(dist, 'favicon.svg'), 'utf8')
+    if (!fav.includes('>IB</text>') && !fav.includes('>IB<')) {
+      fail('favicon.svg should include IB initials')
+    }
+    if (!/#4d48fc/i.test(fav)) {
+      fail('favicon.svg should use multi-tool polymer colour #4d48fc')
+    }
   }
 }
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { createMultitool, type Multitool } from '../three/multitool'
+import type { Multitool } from '../three/multitool'
 
 const props = defineProps<{
   forceArea?: number | null
@@ -16,25 +16,49 @@ const emit = defineEmits<{
   (e: 'area-change', id: string | null): void
   (e: 'expand-change', expanded: boolean): void
   (e: 'intro-complete'): void
+  /** 3 = Three.js chunk loaded, 4 = multitool scene ready. */
+  (e: 'boot-progress', stage: number): void
 }>()
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 let tool: Multitool | null = null
 let observer: ResizeObserver | null = null
+let cancelled = false
 
 onMounted(() => {
   if (!canvas.value) return
-  tool = createMultitool(canvas.value, {
-    showcaseMode: props.showcaseMode,
-    onAreaChange: (id) => emit('area-change', id),
-    onExpandChange: (expanded) => emit('expand-change', expanded),
-    onIntroComplete: () => emit('intro-complete'),
-  })
+  const el = canvas.value
 
-  observer = new ResizeObserver(() => tool?.resize())
-  if (canvas.value.parentElement) observer.observe(canvas.value.parentElement)
+  void (async () => {
+    // Let BotCheck / the boot ring paint a frame before we pull Three.js.
+    // Otherwise cold parse of the ~675kB chunk can block the first gate paint.
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    if (cancelled) return
 
-  if (props.runIntro) tool.playIntro()
+    // Dynamic import keeps the initial shell (BotCheck) off the Three.js chunk.
+    const { createMultitool } = await import('../three/multitool')
+    if (cancelled) return
+    emit('boot-progress', 3)
+
+    tool = createMultitool(el, {
+      showcaseMode: props.showcaseMode,
+      onAreaChange: (id) => emit('area-change', id),
+      onExpandChange: (expanded) => emit('expand-change', expanded),
+      onIntroComplete: () => emit('intro-complete'),
+    })
+    if (cancelled) {
+      tool.dispose()
+      tool = null
+      return
+    }
+
+    observer = new ResizeObserver(() => tool?.resize())
+    if (el.parentElement) observer.observe(el.parentElement)
+
+    emit('boot-progress', 4)
+    if (props.runIntro) tool.playIntro()
+  })()
 })
 
 watch(
@@ -55,6 +79,7 @@ watch(
 )
 
 onBeforeUnmount(() => {
+  cancelled = true
   observer?.disconnect()
   tool?.dispose()
   tool = null
