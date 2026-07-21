@@ -110,18 +110,17 @@ export const areas: Area[] = [
     label: 'Product',
     toolName: 'Wrench',
     tool: 'wrench',
-    tagline: 'Shaping compliant, usable products',
+    tagline: 'Sheperhding user feedback into product direction',
     blurb:
-      'Owning product direction for regulated medical software — balancing clinical needs, usability and the certification bar that healthcare devices must clear.',
+      'Owning product direction for regulated medical software in a featrue rich and high plasticity environment, operating above the certification bar that healthcare devices must clear.',
     skills: [
-      'Product Research',
-      'Medical Device Certification',
+      'LucidChart WireFrames',
+      'Requirement driven design',
+      'Acceptance Criteria',
+      'Traceability Matrices',
+      'MDR 2002',
       'DCB0129',
       'ISO 13485',
-      'Digital Pathology',
-      'LIMS / EPRs',
-      'Order Comms',
-      'Product Design',
     ],
     highlights: [
       {
@@ -144,7 +143,7 @@ export const areas: Area[] = [
     tool: 'ruler',
     tagline: 'Co-ordinating delivery at scale',
     blurb:
-      'Leading multi-disciplinary delivery — product, project, operational and stakeholder management — with radical candour through hard-won trust.',
+      'Leading multi-disciplinary delivery through product, project, operational and stakeholder management.',
     skills: [
       'Project Management',
       'Operational Management',
