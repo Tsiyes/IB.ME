@@ -79,13 +79,16 @@ export const areas: Area[] = [
       'C#',
       'Mirth Connect',
       'Kubernetes',
-      'Azure',
+      'Azure DB',
       'SQL Server',
       'Cosmos DB',
-      'LLM / Agentic workflows',
-      'Cypress / Mochawesome',
+      'LLM/Agentic workflows',
+      'Cypress & Mochawesome',
       'Network Configuration',
-      'Cloud / On-Prem WinServ',
+      'Cloud/On-Prem WinServ',
+      'Cerner/EPIC/Medway/ICE',
+      'TQuest/Keystone/CareFlow',
+      '3DHistech/NPIC/NCL'
     ],
     highlights: [
       {
@@ -178,7 +181,7 @@ export const areas: Area[] = [
       'Molecular Biology',
       'Cellular Pathology',
       'Assay Validation / Verification',
-      'HL7 / Analyser Interfacing',
+      'HL7/Analyser Interfacing',
       'Roche',
       'Leica',
       'CE Marking',
@@ -228,7 +231,6 @@ export const experience: Company[] = [
           'Integration of medical devices and systems',
           'Stakeholder management',
         ],
-        skills: ['Cypress', 'SQL', 'Vue.js', 'C#', 'Kubernetes', 'Azure', 'Tableau', 'Notion'],
       },
       {
         title: 'Laboratory Supervisor',
